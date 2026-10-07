@@ -1,6 +1,6 @@
 # Plan de desarrollo por fases — Contraseñas
 
-**Estado:** Fase 1 ✅ completada · **Fase 2 pendiente de aprobación**
+**Estado:** Fase 2 ✅ completada · **Fase 3 pendiente de aprobación**
 
 Alineado con requisito §36. Prioridad: seguridad de secretos. Entre fases: checklist §37 + revisión de amenazas §39.
 
@@ -34,19 +34,23 @@ Alineado con requisito §36. Prioridad: seguridad de secretos. Entre fases: chec
 - Spike SQLCipher: documentado como pendiente de build real en Fase 3; trait + fallback blob listo en diseño.
 - Kit de emergencia: diseño en `SECURITY.md` §2.1; stubs solo.
 
-**Gate:** esqueleto compila offline (GUI Tauri best-effort si faltan deps del SO); sin secretos reales.  
-**Siguiente:** Fase 2 **solo tras aprobación explícita**.
+**Gate:** ✅ esqueleto listo; crates con tests; frontend typecheck/build; `cargo check -p contrasenas-desktop` OK con deps GUI Linux; sin secretos reales.  
+**Smoke local:** `pnpm --dir apps/desktop install && pnpm smoke` (o `cargo test -p vault-core -p vault-storage -p vault-backup` + `pnpm --dir apps/desktop lint`).  
+**Siguiente:** Fase 2 ✅ (aprobada e implementada).
 
 ---
 
-## FASE 2 — Criptografía
+## FASE 2 — Criptografía ✅
 
-- Argon2id, AES-256-GCM, wrap/unwrap DEK, zeroize.
-- Vectores de test y property tests.
-- API de sesión: derive → use → wipe.
-- **No continuar a F3 sin tests crypto en verde.**
+- Argon2id (params v1 versionados; `for_tests` en unitarios), AES-256-GCM, wrap/unwrap DEK, `zeroize`.
+- Cabecera `CryptoHeaderV1` (`format_version`, KDF, salts, wrapped DEK ± recovery).
+- Sesión en memoria: derive → use → wipe.
+- Kit de emergencia a nivel crypto: generar código, wrap/unwrap recovery, rewrap master.
+- Tests verdes en `vault-core` (round-trip, wrong key, tamper, corrupt, KDF/header version, recovery).
+- **Sin** persistencia de bóveda ni CRUD.
 
-**Gate:** tests crypto + documentación de límites de memoria.
+**Gate:** ✅ `cargo test -p vault-core` en verde + límites de memoria documentados en `SECURITY.md`.  
+**Siguiente:** Fase 3 **solo tras aprobación explícita**.
 
 ---
 

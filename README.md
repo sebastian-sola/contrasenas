@@ -5,10 +5,10 @@ No envía datos a Internet. La seguridad va por delante de la comodidad.
 
 ## En qué punto estamos
 
-**Fase 1 — esqueleto.** Ya existe la estructura del proyecto (pantalla de bloqueo de prueba, piezas internas vacías).  
-**Todavía no** se crean bóvedas reales ni se guardan contraseñas de verdad.
+**Fase 2 — criptografía.** Ya existe el “candado” interno (cifrado moderno, pruebas automáticas).  
+**Todavía no** se crean bóvedas guardadas en el disco ni se almacenan tus contraseñas de sitios.
 
-La siguiente etapa (Fase 2) será la criptografía real, y **solo empezará cuando Sebastián lo apruebe**.
+La siguiente etapa (Fase 3) será guardar la bóveda en el ordenador, y **solo empezará cuando Sebastián lo apruebe**.
 
 ## Qué se ha decidido (aprobado)
 
@@ -66,4 +66,5 @@ docs/                  → plan de seguridad y fases
 
 - No hay telemetría.
 - No subas nunca ficheros de bóveda, backups ni códigos de emergencia a Git.
-- Fase 2 (crypto real) **pendiente de aprobación**.
+- Fase 3 (bóveda en disco) **pendiente de aprobación**.
+- Comprobar crypto: `cargo test -p vault-core`

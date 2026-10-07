@@ -1,6 +1,6 @@
 # Contexto de proyecto — Contraseñas
 
-**Actualizado:** 2026-10-07 · Fase 1 (esqueleto)
+**Actualizado:** 2026-10-07 · Fase 2 (criptografía)
 
 ## Qué es
 
@@ -9,7 +9,7 @@ Gestor de contraseñas/secretos de **escritorio local**, offline-first, con prio
 ## Objetivos durables
 
 - Cifrar todo el almacén; master password nunca almacenada (ni de forma recuperable).
-- Kit de emergencia: segunda vía para recuperar acceso a la bóveda si se olvida la master (ver `SECURITY.md`).
+- Kit de emergencia: segunda vía para recuperar acceso si se olvida la master (crypto ✅; disco en Fase 3).
 - Sin telemetría, sin red innecesaria, dependencias mínimas.
 - Historial default = metadatos; auditoría cifrada sin secretos.
 - Extensible a 2FA real / multi-bóveda / sync **sin** implementarlos ahora.
@@ -25,8 +25,8 @@ Gestor de contraseñas/secretos de **escritorio local**, offline-first, con prio
 |----|----------|--------|
 | D1 | Stack: **Tauri 2 + Rust + React/TS** | **Aprobado** 2026-10-07 |
 | D2 | Storage: **SQLCipher + AEAD de campos**; trait + fallback blob AEAD | **Aprobado** 2026-10-07 |
-| D3 | Crypto: AES-256-GCM + Argon2id (params versionados) + DEK envuelta | Propuesta (Fase 2) |
-| D4 | Recuperación: **kit de emergencia** (no solo pérdida total) | **Aprobado** 2026-10-07 |
+| D3 | Crypto: AES-256-GCM + Argon2id (params versionados) + DEK envuelta | **Implementado** Fase 2 |
+| D4 | Recuperación: **kit de emergencia** (no solo pérdida total) | **Aprobado** + crypto capa F2 |
 | D5 | Plataforma: arquitectura multi-OS; **priorizar Windows** si hay que recortar | Propuesta |
 | D6 | Auditoría MVP: AEAD/SQLCipher (A); schema listo para hash encadenado (B) | Propuesta |
 | D7 | Historial de secretos opt-in: **no en MVP temprano** (Fase 7+ si se aprueba) | Propuesta |
@@ -41,9 +41,8 @@ Sync cloud, telemetría, 2FA simulado, breach-check online, extensión browser, 
 
 ## Estado del trabajo
 
-- **Fase 0** ✅ aprobada.
-- **Fase 1** esqueleto Tauri + crates + UI placeholder (sin crypto de producción).
-- **Siguiente:** Fase 2 (criptografía) tras aprobación explícita.
+- **Fase 0** ✅ · **Fase 1** ✅ · **Fase 2** ✅ (crypto en `vault-core`).
+- **Siguiente:** Fase 3 (bóveda en disco) **tras aprobación explícita**.
 
 ## Rutas canónicas (Agent Store)
 

@@ -1,7 +1,7 @@
 # Índice Fase 0 — Arquitectura y seguridad
 
-**Estado:** Fase 0 aprobada (D1, D2, D4) · Fase 1 esqueleto · **Fase 2 pendiente de aprobación**  
-**Regla:** no iniciar crypto de producción (Fase 2) sin aprobación explícita
+**Estado:** Fases 0–2 ✅ · **Fase 3 (bóveda en disco) pendiente de aprobación**  
+**Regla:** no iniciar Fase 3 sin aprobación explícita
 
 Los documentos canónicos detallados están en este Agent Store. El repo Git lleva el mismo conjunto bajo `docs/` para la PR.
 
@@ -44,6 +44,6 @@ Los documentos canónicos detallados están en este Agent Store. El repo Git lle
 
 ## Gate actual
 
-**Fase 1 hecha** (esqueleto). **No iniciar Fase 2** sin aprobación de Sebastián.
+**Fase 2 hecha** (crypto en memoria). **No iniciar Fase 3** sin aprobación de Sebastián.
 
-Pendientes no bloqueantes de F1: D5 plataforma, D6 auditoría, D7 historial secrets, D8 keystore, D9 passphrase backup.
+Pendientes: D5 plataforma, D6 auditoría, D7 historial secrets, D8 keystore, D9 passphrase backup.

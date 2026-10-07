@@ -1,10 +1,10 @@
-//! Shell Tauri — Fase 1: IPC mínima y placeholders (sin bóveda real).
+//! Shell Tauri — Fase 2: crypto en crates; sin persistencia de bóveda.
 
 use serde::Serialize;
 use vault_backup::{BackupService, StubBackupService};
-use vault_core::recovery::{RecoveryKit, StubRecoveryKit};
+use vault_core::recovery::{ProductionRecoveryKit, RecoveryKit};
 use vault_core::session::{SessionState, VaultSession};
-use vault_core::{AppPaths, APP_SCHEMA_VERSION};
+use vault_core::{AppPaths, APP_SCHEMA_VERSION, IMPLEMENTED_PHASE};
 use vault_storage::{StorageBackendKind, StubVaultStore, VaultStore};
 
 use std::sync::Mutex;
@@ -46,23 +46,23 @@ fn get_phase_info(state: tauri::State<'_, Mutex<AppState>>) -> Result<PhaseInfo,
         .lock()
         .map_err(|_| "estado interno bloqueado".to_string())?;
     let store = StubVaultStore::preferred_sqlcipher();
-    let recovery = StubRecoveryKit;
+    let recovery = ProductionRecoveryKit;
     let backup = StubBackupService;
     let paths = AppPaths::from_data_dir(std::path::PathBuf::from("(data-dir-del-SO)"));
 
     Ok(PhaseInfo {
-        phase: 1,
+        phase: IMPLEMENTED_PHASE,
         schema_version: APP_SCHEMA_VERSION,
         session_state: session_label(guard.session.state()),
         storage_backend: backend_label(store.backend_kind()),
         recovery_summary: recovery.design_summary().to_string(),
         backup_format_version: backup.format_version(),
         data_dir_hint: paths.data_dir.display().to_string(),
-        production_crypto: false,
+        production_crypto: true,
     })
 }
 
-/// Intento de desbloqueo: en Fase 1 siempre falla (sin crypto real).
+/// Sin cabecera persistida (Fase 3): el desbloqueo de UI sigue siendo stub.
 #[tauri::command]
 fn try_unlock(
     state: tauri::State<'_, Mutex<AppState>>,
@@ -71,7 +71,6 @@ fn try_unlock(
     let mut guard = state
         .lock()
         .map_err(|_| "estado interno bloqueado".to_string())?;
-    // No registrar ni retener la password.
     let result = guard.session.try_unlock_stub(&master_password);
     drop(master_password);
     result.map_err(|e| e.to_string())
@@ -82,7 +81,6 @@ fn lock_session(state: tauri::State<'_, Mutex<AppState>>) -> Result<(), String> 
     let mut guard = state
         .lock()
         .map_err(|_| "estado interno bloqueado".to_string())?;
-    // En Fase 1 la sesión siempre está locked; ignoramos AlreadyLocked como OK de UI.
     match guard.session.lock() {
         Ok(()) | Err(vault_core::session::SessionError::AlreadyLocked) => Ok(()),
         Err(e) => Err(e.to_string()),

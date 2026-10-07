@@ -58,7 +58,7 @@ function App() {
       setMessage("Desbloqueo inesperado (no debería ocurrir en Fase 1).");
     } catch {
       setMessage(
-        "Fase 1: el desbloqueo real aún no está activo. La contraseña no se guarda.",
+        "Fase 2: aún no hay bóveda en disco. La contraseña no se guarda.",
       );
     } finally {
       setPassword("");
@@ -71,9 +71,9 @@ function App() {
         <p className="brand">Contraseñas</p>
         <h1>Bóveda bloqueada</h1>
         <p className="lede">
-          Gestor local de secretos. Estamos en la <strong>fase 1</strong>:
-          esqueleto de la aplicación. Todavía no se crean ni abren bóvedas
-          reales.
+          Gestor local de secretos. Estamos en la <strong>fase 2</strong>:
+          la criptografía interna ya existe, pero todavía no se crean ni abren
+          bóvedas guardadas en el disco.
         </p>
 
         <form className="lock-form" onSubmit={onSubmit}>

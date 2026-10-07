@@ -1,6 +1,6 @@
 # Seguridad — Contraseñas
 
-**Fase 1 · Diseño aprobado (D1, D2, D4) · Crypto de producción aún no implementada**
+**Fase 2 · Crypto de producción implementada en `vault-core` (sin persistencia de bóveda)**
 
 Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas (§35).
 
@@ -8,29 +8,44 @@ Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas
 
 ## 1. Modelo criptográfico
 
+### 1.0 Estado de implementación (Fase 2)
+
+| Capacidad | Estado |
+|-----------|--------|
+| Argon2id → KEK | ✅ `crypto::derive_kek` |
+| AES-256-GCM encrypt/decrypt + AAD | ✅ `crypto::encrypt` / `decrypt` |
+| Salt / DEK CSPRNG | ✅ `generate_salt` / `generate_dek` |
+| Wrap/unwrap DEK (master + recovery AAD) | ✅ `wrap_dek` / `unwrap_dek` |
+| Cabecera versionada `CryptoHeaderV1` | ✅ serializable JSON; `format_version = 1` |
+| Sesión derive → use → wipe | ✅ `VaultSession` + `zeroize` en DEK/KEK |
+| Kit emergencia (capa crypto) | ✅ generar código, unlock recovery, rewrap master |
+| Persistencia bóveda / SQLCipher | ❌ Fase 3 |
+| CRUD credenciales | ❌ Fase 4 |
+
+Errores (`CryptoError`, `SessionError`, `RecoveryError`): mensajes genéricos; **nunca** incluyen passwords, claves ni ciphertext interpretado como secreto en logs de error.
+
 ### 1.1 Algoritmos
 
 | Uso | Elección | Notas |
 |-----|----------|-------|
-| AEAD de secretos / envoltorios | **AES-256-GCM** (default) | ChaCha20-Poly1305 como alternativa compatible en formato |
-| KDF | **Argon2id** | Params versionados en header |
-| CSPRNG | `getrandom` / OsRng | Nunca PRNG no cripto |
-| Hash cadena auditoría (opt) | BLAKE3 o SHA-256 | Ver `AUDIT.md` |
-| Digest reutilización (sesión) | BLAKE3/SHA-256 de secreto en claro | Solo en memoria desbloqueada |
+| AEAD de secretos / envoltorios | **AES-256-GCM** (implementado) | ChaCha20-Poly1305 reservado; no necesario aún |
+| KDF | **Argon2id** | Params versionados en header (`kdf_version`) |
+| CSPRNG | `rand` / OsRng | Nunca PRNG no cripto |
+| Hash cadena auditoría (opt) | BLAKE3 o SHA-256 | Ver `AUDIT.md` (aún no) |
+| Digest reutilización (sesión) | BLAKE3/SHA-256 de secreto en claro | Solo en memoria desbloqueada (Fase 4+) |
 
-### 1.2 Parámetros Argon2id v1 (propuestos)
+### 1.2 Parámetros Argon2id v1 (**implementados**)
 
-Calibrar en hardware de referencia a ~250–500 ms:
-
-| Parámetro | Valor propuesto |
-|-----------|-----------------|
-| Memoria `m` | 64 MiB |
+| Parámetro | Valor v1 en código (`KdfParams::v1`) |
+|-----------|--------------------------------------|
+| Memoria `m` | 64 MiB (`65536` KiB) |
 | Iteraciones `t` | 3 |
 | Paralelismo `p` | 1 |
-| Salt | 16 B CSPRNG / bóveda |
+| Salt | 16 B CSPRNG |
 | Salida | 32 B (KEK) |
 
-Header público: `kdf_id`, `kdf_version`, params, salt. Migración: re-envoltorio de DEK con params nuevos al desbloquear.
+`KdfParams::for_tests()` usa memoria mínima solo en unit tests.  
+Header público: `kdf_id`, `kdf_version`, params, salt, `wrapped_dek`, opcional recovery. Migración futura: re-envoltorio de DEK con params nuevos al desbloquear.
 
 ### 1.3 Jerarquía y ciclo de claves
 
@@ -48,14 +63,15 @@ Master **nunca** en disco, config, logs, URLs, telemetría ni keystore OS en for
 
 ### 1.4 Límites reales de memoria (Rust + WebView)
 
-| Técnica | Aporta | No garantiza |
-|---------|--------|--------------|
-| `zeroize` / `SecretVec` | Sobrescritura al drop; menos leaks por Display | Copias del compilador/OS; swap; dumps |
-| Minimizar IPC de secretos | Menos superficie JS | GC del WebView |
-| `mlock` best-effort | Menos swap | Permisos / portabilidad |
-| Evitar core dumps | Menos fugas a disco | Crash reporters OS |
+| Técnica | Implementado Fase 2 | No garantiza |
+|---------|---------------------|--------------|
+| `zeroize` / `ZeroizeOnDrop` en DEK/KEK | ✅ | Copias del compilador/OS; swap; dumps |
+| `Debug` redactado en claves | ✅ | Debugger lee memoria igual |
+| Minimizar IPC de secretos | Parcial (UI aún stub) | GC del WebView |
+| `mlock` | ❌ no aún | — |
+| Evitar core dumps | ❌ no aún | Crash reporters OS |
 
-**Un atacante con lectura de memoria del proceso desbloqueado puede obtener secretos.** Mitigación principal: auto-lock y minimizar tiempo en claro — no “secure enclave” software.
+**Un atacante con lectura de memoria del proceso desbloqueado puede obtener secretos.** Mitigación principal: auto-lock (Fase 3/8) y minimizar tiempo en claro — no “secure enclave” software.
 
 ---
 
@@ -66,41 +82,37 @@ Master **nunca** en disco, config, logs, URLs, telemetría ni keystore OS en for
 - Backoff progresivo tras fallos (ej. 0→0→2→5→15→30→60 s tope); auditar intentos; **sin lockout permanente** sin mecanismo de recuperación aprobado.
 - Recuperación: **kit de emergencia aprobado (D4)** — ver §2.1. No “preguntas secretas” ni email.
 
-### 2.1 Kit de emergencia (diseño; stubs en Fase 1, crypto real en Fase 2+)
+### 2.1 Kit de emergencia (crypto ✅ Fase 2; persistencia UI en Fase 3+)
 
-**Qué es (lenguaje sencillo):** al crear la bóveda, la app genera un **código de emergencia de un solo uso de lectura** (frase o clave larga). Sebastián debe **guardarlo fuera del ordenador** (papel en lugar seguro, o medio offline). Si olvida la contraseña maestra, ese código permite recuperar el acceso y elegir una contraseña nueva.
+**Qué es (lenguaje sencillo):** al crear la bóveda, la app genera un **código de emergencia** (hex de 32 bytes aleatorios). Sebastián debe **guardarlo fuera del ordenador** (papel en lugar seguro). Si olvida la contraseña maestra, ese código permite recuperar el acceso y elegir una contraseña nueva.
 
 **Qué no es:**
 
 - No es un envío por correo ni un “olvidé mi contraseña” en la nube.
-- **La contraseña maestra nunca se guarda** de forma que se pueda leer después (ni en disco, ni en el kit, ni en el almacén del sistema operativo).
-- El kit **no revela** la master antigua; solo permite **desenvolver la misma clave de datos (DEK)** y volver a envolverla con una master nueva.
+- **La contraseña maestra nunca se guarda** de forma que se pueda leer después.
+- El kit **no revela** la master antigua; solo permite **desenvolver la misma DEK** y volver a envolverla con una master nueva (`rewrap_dek_with_new_master`).
 
-**Cómo funciona a alto nivel (diseño):**
+**Implementado en código (sin guardar aún en disco):**
 
 ```
-Al crear bóveda:
+bootstrap_key_material(..., with_recovery_kit=true)
   DEK aleatoria
-  ├─ envuelta con KEK_master = Argon2id(master)
-  └─ envuelta con KEK_recovery = KDF(código de emergencia)
-  → mostrar código UNA vez → usuario confirma haberlo guardado
-
-Al recuperar:
-  código → KEK_recovery → unwrap DEK → pedir nueva master → wrap con KEK_master nueva
-  (invalidar / rotar código de emergencia tras uso exitoso — política a implementar)
+  ├─ wrapped_dek (AAD master)
+  └─ wrapped_dek_recovery (AAD recovery) + recovery_salt
+unlock_dek_with_recovery(código, header) → DEK
+rewrap_dek_with_new_master(DEK, nueva_master) → nueva cabecera master
 ```
+
+Rotación obligatoria del código tras uso exitoso: política a cablear en Fase 3 (UI + persistencia).
 
 **Riesgos (honestos):**
 
-| Riesgo | Mitigación de diseño |
-|--------|----------------------|
-| Quien robe el kit abre la bóveda | Tratarlo como las llaves de casa; no digitalizar en cloud |
-| Foto / captura del kit en pantalla | UI de revelación única; aviso claro |
-| Pérdida de master **y** del kit | Datos irrecuperables (igual que un disco cifrado sin clave) |
-| Kit débil o predecible | Generación CSPRNG de alta entropía (implementación Fase 2+) |
-
-**Fase 1:** solo documentación + stubs de API (`RecoveryKit` / traits) **sin** generar ni persistir material real.  
-**Fase 2+:** implementación crypto con tests antes de usarlo en la bóveda real.
+| Riesgo | Mitigación |
+|--------|------------|
+| Quien robe el kit abre la bóveda | Tratarlo como llaves de casa; no cloud |
+| Foto / captura en pantalla | UI de revelación única (Fase 3) |
+| Pérdida de master **y** del kit | Datos irrecuperables |
+| Kit débil | CSPRNG 256 bits (hex) |
 
 ---
 
