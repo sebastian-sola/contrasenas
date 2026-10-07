@@ -1,10 +1,11 @@
-//! Shell Tauri — Fase 4: bóveda + CRUD de credenciales.
+//! Shell Tauri — Fase 5: bóveda + credenciales + políticas.
 
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use vault_backup::{BackupService, StubBackupService};
 use vault_core::credentials::{Credential, CredentialInput, CredentialSummary, HistoryEntry};
+use vault_core::policy::{PasswordPolicy, PolicyInput, PolicyValidation};
 use vault_core::recovery::{ProductionRecoveryKit, RecoveryKit};
 use vault_core::session::SessionState;
 use vault_core::{AppPaths, Vault, APP_SCHEMA_VERSION, IMPLEMENTED_PHASE};
@@ -198,6 +199,67 @@ fn credentials_history(
     })
 }
 
+#[tauri::command]
+fn policies_list(state: tauri::State<'_, Mutex<AppState>>) -> Result<Vec<PasswordPolicy>, String> {
+    with_vault_mut(&state, |vault| {
+        vault.list_policies().map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn policies_get(
+    state: tauri::State<'_, Mutex<AppState>>,
+    id: String,
+) -> Result<PasswordPolicy, String> {
+    with_vault_mut(&state, |vault| {
+        vault.get_policy(&id).map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn policies_create(
+    state: tauri::State<'_, Mutex<AppState>>,
+    input: PolicyInput,
+) -> Result<PasswordPolicy, String> {
+    with_vault_mut(&state, |vault| {
+        vault.create_policy(input).map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn policies_update(
+    state: tauri::State<'_, Mutex<AppState>>,
+    id: String,
+    input: PolicyInput,
+) -> Result<PasswordPolicy, String> {
+    with_vault_mut(&state, |vault| {
+        vault.update_policy(&id, input).map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn policies_delete(state: tauri::State<'_, Mutex<AppState>>, id: String) -> Result<(), String> {
+    with_vault_mut(&state, |vault| {
+        vault.delete_policy(&id).map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn policies_validate(
+    state: tauri::State<'_, Mutex<AppState>>,
+    policy_id: String,
+    password: String,
+    credential_id: Option<String>,
+) -> Result<PolicyValidation, String> {
+    let result = with_vault_mut(&state, |vault| {
+        vault
+            .validate_against_policy(&policy_id, &password, credential_id.as_deref())
+            .map_err(|e| e.to_string())
+    });
+    drop(password);
+    result
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -216,7 +278,13 @@ pub fn run() {
             credentials_update,
             credentials_delete,
             credentials_restore,
-            credentials_history
+            credentials_history,
+            policies_list,
+            policies_get,
+            policies_create,
+            policies_update,
+            policies_delete,
+            policies_validate
         ])
         .run(tauri::generate_context!())
         .expect("error al arrancar Contraseñas");

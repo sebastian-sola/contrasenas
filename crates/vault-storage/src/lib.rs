@@ -1,4 +1,4 @@
-//! Almacenamiento de bóveda — Fase 3/4.
+//! Almacenamiento de bóveda — Fase 3–5.
 //!
 //! Backend preferido: **SQLCipher** + AEAD de campos en `vault-core`.
 
@@ -11,8 +11,8 @@ mod sqlcipher;
 
 pub use blob::BlobVaultDb;
 pub use permissions::{ensure_data_dir, set_owner_only_file_permissions};
-pub use rows::{CredentialRow, HistoryRow};
-pub use sqlcipher::{SqlCipherVaultDb, SCHEMA_VERSION_V1, SCHEMA_VERSION_V2};
+pub use rows::{CredentialRow, HistoryRow, PolicyRow};
+pub use sqlcipher::{SqlCipherVaultDb, SCHEMA_VERSION_V1, SCHEMA_VERSION_V2, SCHEMA_VERSION_V3};
 
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -37,6 +37,8 @@ pub enum StorageError {
     AlreadyOpen,
     #[error("credencial no encontrada")]
     CredentialNotFound,
+    #[error("política no encontrada")]
+    PolicyNotFound,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -78,6 +80,25 @@ pub trait VaultDb: Send {
     fn insert_history(&mut self, row: &HistoryRow) -> Result<(), StorageError>;
     fn list_history(&self, credential_id: &str) -> Result<Vec<HistoryRow>, StorageError>;
     fn count_password_fp(&self, fp: &str, exclude_id: Option<&str>) -> Result<u32, StorageError>;
+
+    // --- Políticas (Fase 5) ---
+    fn upsert_policy(&mut self, row: &PolicyRow) -> Result<(), StorageError>;
+    fn get_policy(&self, id: &str) -> Result<Option<PolicyRow>, StorageError>;
+    fn list_policies(&self) -> Result<Vec<PolicyRow>, StorageError>;
+    fn delete_policy(&mut self, id: &str) -> Result<(), StorageError>;
+    fn clear_credential_policy(&mut self, policy_id: &str) -> Result<(), StorageError>;
+    fn insert_password_fp_history(
+        &mut self,
+        id: &str,
+        credential_id: &str,
+        password_fp: &str,
+        created_at: &str,
+    ) -> Result<(), StorageError>;
+    fn list_password_fp_history(
+        &self,
+        credential_id: &str,
+        limit: u32,
+    ) -> Result<Vec<String>, StorageError>;
 }
 
 pub fn default_backend() -> StorageBackendKind {

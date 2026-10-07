@@ -27,6 +27,8 @@ pub struct CredentialRow {
     /// Huella opaca (hex) para reutilización; no es la contraseña.
     pub password_fp: Option<String>,
     pub deleted_at: Option<String>,
+    /// Política de contraseñas asociada (Fase 5).
+    pub policy_id: Option<String>,
 }
 
 /// Entrada de historial (solo metadatos; sin contraseñas).
@@ -39,4 +41,25 @@ pub struct HistoryRow {
     pub action: String,
     pub fields_changed: Option<String>,
     pub reason: Option<String>,
+}
+
+/// Política de contraseñas (sin secretos).
+#[derive(Debug, Clone)]
+pub struct PolicyRow {
+    pub id: String,
+    pub name: String,
+    pub min_length: i32,
+    pub max_length: i32,
+    pub require_uppercase: i32,
+    pub require_lowercase: i32,
+    pub require_digit: i32,
+    pub require_symbol: i32,
+    pub allow_spaces: i32,
+    pub forbidden_chars: Option<String>,
+    pub forbidden_patterns_json: Option<String>,
+    pub previous_password_count: i32,
+    pub expiry_days: Option<i32>,
+    pub extra_rules_json: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
 }

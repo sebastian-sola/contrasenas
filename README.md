@@ -5,9 +5,9 @@ No envía datos a Internet. La seguridad va por delante de la comodidad.
 
 ## En qué punto estamos
 
-**Fase 4 — credenciales.** Ya puedes crear una bóveda cifrada y **guardar, buscar, ver y editar** contraseñas de sitios (password oculta por defecto; reuso solo como número).
+**Fase 5 — políticas.** Además de guardar contraseñas, puedes **definir reglas** (longitud, mayúsculas, símbolos…) por servicio y ver si cada clave **cumple o no**.
 
-La siguiente etapa (Fase 5 — políticas de contraseñas) **solo empezará cuando Sebastián lo apruebe**.
+La siguiente etapa (Fase 6 — generador de contraseñas) **solo empezará cuando Sebastián lo apruebe**.
 
 > Todo el desarrollo hasta ahora está en la máquina del agente cloud / este repositorio. **Nada se ha instalado en el ordenador personal de Sebastián.**
 
@@ -67,5 +67,5 @@ docs/                  → plan de seguridad y fases
 
 - No hay telemetría.
 - No subas nunca ficheros de bóveda, backups ni códigos de emergencia a Git.
-- Fase 5 (políticas) **pendiente de aprobación**.
+- Fase 6 (generador) **pendiente de aprobación**.
 - Comprobar bóveda + CRUD: `cargo test -p vault-core -p vault-storage -p vault-backup`

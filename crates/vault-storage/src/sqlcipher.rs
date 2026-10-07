@@ -1,13 +1,14 @@
-//! Backend SQLCipher (D2 preferido) — schema v2 con credenciales.
+//! Backend SQLCipher (D2 preferido) — schema v3 con políticas.
 
 use super::permissions::set_owner_only_file_permissions;
-use super::rows::{CredentialRow, HistoryRow};
+use super::rows::{CredentialRow, HistoryRow, PolicyRow};
 use super::{StorageBackendKind, StorageError, VaultDb};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
 
 pub const SCHEMA_VERSION_V1: u16 = 1;
 pub const SCHEMA_VERSION_V2: u16 = 2;
+pub const SCHEMA_VERSION_V3: u16 = 3;
 
 pub struct SqlCipherVaultDb {
     path: PathBuf,
@@ -66,7 +67,6 @@ impl SqlCipherVaultDb {
             .prepare("SELECT password_fp FROM credentials LIMIT 1")
             .is_ok();
         if !has_fp {
-            // Sustituir tabla v1 (o inexistente) por schema v2 completo.
             conn.execute_batch(
                 r#"
                 CREATE TABLE credentials_new (
@@ -131,6 +131,50 @@ impl SqlCipherVaultDb {
         Ok(())
     }
 
+    fn migrate_to_v3(&self) -> Result<(), StorageError> {
+        let conn = self.conn()?;
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS policies (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                min_length INTEGER NOT NULL,
+                max_length INTEGER NOT NULL,
+                require_uppercase INTEGER NOT NULL DEFAULT 0,
+                require_lowercase INTEGER NOT NULL DEFAULT 0,
+                require_digit INTEGER NOT NULL DEFAULT 0,
+                require_symbol INTEGER NOT NULL DEFAULT 0,
+                allow_spaces INTEGER NOT NULL DEFAULT 0,
+                forbidden_chars TEXT,
+                forbidden_patterns_json TEXT,
+                previous_password_count INTEGER NOT NULL DEFAULT 0,
+                expiry_days INTEGER,
+                extra_rules_json TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS password_fp_history (
+                id TEXT PRIMARY KEY NOT NULL,
+                credential_id TEXT NOT NULL,
+                password_fp TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            "#,
+        )
+        .map_err(|_| StorageError::Database)?;
+
+        let has_policy_id = conn
+            .prepare("SELECT policy_id FROM credentials LIMIT 1")
+            .is_ok();
+        if !has_policy_id {
+            conn.execute_batch("ALTER TABLE credentials ADD COLUMN policy_id TEXT;")
+                .map_err(|_| StorageError::Database)?;
+        }
+
+        self.set_schema_version(SCHEMA_VERSION_V3)?;
+        Ok(())
+    }
+
     fn map_credential_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<CredentialRow> {
         Ok(CredentialRow {
             id: r.get(0)?,
@@ -156,8 +200,38 @@ impl SqlCipherVaultDb {
             policy_compliant: r.get(20)?,
             password_fp: r.get(21)?,
             deleted_at: r.get(22)?,
+            policy_id: r.get(23)?,
         })
     }
+
+    fn map_policy_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<PolicyRow> {
+        Ok(PolicyRow {
+            id: r.get(0)?,
+            name: r.get(1)?,
+            min_length: r.get(2)?,
+            max_length: r.get(3)?,
+            require_uppercase: r.get(4)?,
+            require_lowercase: r.get(5)?,
+            require_digit: r.get(6)?,
+            require_symbol: r.get(7)?,
+            allow_spaces: r.get(8)?,
+            forbidden_chars: r.get(9)?,
+            forbidden_patterns_json: r.get(10)?,
+            previous_password_count: r.get(11)?,
+            expiry_days: r.get(12)?,
+            extra_rules_json: r.get(13)?,
+            created_at: r.get(14)?,
+            updated_at: r.get(15)?,
+        })
+    }
+
+    const CRED_SELECT: &'static str = r#"
+            SELECT id, service_name, category, description, url, system_app, environment,
+                   username, password_ciphertext, auth_type, domain, email, notes_ciphertext,
+                   created_at, updated_at, password_changed_at, next_renewal_at, expiry_policy,
+                   status, strength_score, policy_compliant, password_fp, deleted_at, policy_id
+            FROM credentials
+    "#;
 }
 
 impl VaultDb for SqlCipherVaultDb {
@@ -243,11 +317,15 @@ impl VaultDb for SqlCipherVaultDb {
         .map_err(|_| StorageError::Database)?;
 
         let current = self.schema_version().unwrap_or(0);
-        if current > SCHEMA_VERSION_V2 {
+        if current > SCHEMA_VERSION_V3 {
             return Err(StorageError::UnsupportedMigration);
         }
         if current < SCHEMA_VERSION_V2 {
             self.migrate_to_v2()?;
+        }
+        let current = self.schema_version().unwrap_or(0);
+        if current < SCHEMA_VERSION_V3 {
+            self.migrate_to_v3()?;
         }
         Ok(())
     }
@@ -281,9 +359,9 @@ impl VaultDb for SqlCipherVaultDb {
                 id, service_name, category, description, url, system_app, environment,
                 username, password_ciphertext, auth_type, domain, email, notes_ciphertext,
                 created_at, updated_at, password_changed_at, next_renewal_at, expiry_policy,
-                status, strength_score, policy_compliant, password_fp, deleted_at
+                status, strength_score, policy_compliant, password_fp, deleted_at, policy_id
             ) VALUES (
-                ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23
+                ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24
             )
             ON CONFLICT(id) DO UPDATE SET
                 service_name=excluded.service_name,
@@ -306,7 +384,8 @@ impl VaultDb for SqlCipherVaultDb {
                 strength_score=excluded.strength_score,
                 policy_compliant=excluded.policy_compliant,
                 password_fp=excluded.password_fp,
-                deleted_at=excluded.deleted_at
+                deleted_at=excluded.deleted_at,
+                policy_id=excluded.policy_id
             "#,
             params![
                 row.id,
@@ -332,6 +411,7 @@ impl VaultDb for SqlCipherVaultDb {
                 row.policy_compliant,
                 row.password_fp,
                 row.deleted_at,
+                row.policy_id,
             ],
         )
         .map_err(|_| StorageError::Database)?;
@@ -340,41 +420,23 @@ impl VaultDb for SqlCipherVaultDb {
 
     fn get_credential(&self, id: &str) -> Result<Option<CredentialRow>, StorageError> {
         let conn = self.conn()?;
-        conn.query_row(
-            r#"
-            SELECT id, service_name, category, description, url, system_app, environment,
-                   username, password_ciphertext, auth_type, domain, email, notes_ciphertext,
-                   created_at, updated_at, password_changed_at, next_renewal_at, expiry_policy,
-                   status, strength_score, policy_compliant, password_fp, deleted_at
-            FROM credentials WHERE id = ?1
-            "#,
-            [id],
-            Self::map_credential_row,
-        )
-        .optional()
-        .map_err(|_| StorageError::Database)
+        let sql = format!("{} WHERE id = ?1", Self::CRED_SELECT);
+        conn.query_row(&sql, [id], Self::map_credential_row)
+            .optional()
+            .map_err(|_| StorageError::Database)
     }
 
     fn list_credentials(&self, include_deleted: bool) -> Result<Vec<CredentialRow>, StorageError> {
         let conn = self.conn()?;
         let sql = if include_deleted {
-            r#"
-            SELECT id, service_name, category, description, url, system_app, environment,
-                   username, password_ciphertext, auth_type, domain, email, notes_ciphertext,
-                   created_at, updated_at, password_changed_at, next_renewal_at, expiry_policy,
-                   status, strength_score, policy_compliant, password_fp, deleted_at
-            FROM credentials ORDER BY service_name COLLATE NOCASE
-            "#
+            format!("{} ORDER BY service_name COLLATE NOCASE", Self::CRED_SELECT)
         } else {
-            r#"
-            SELECT id, service_name, category, description, url, system_app, environment,
-                   username, password_ciphertext, auth_type, domain, email, notes_ciphertext,
-                   created_at, updated_at, password_changed_at, next_renewal_at, expiry_policy,
-                   status, strength_score, policy_compliant, password_fp, deleted_at
-            FROM credentials WHERE deleted_at IS NULL ORDER BY service_name COLLATE NOCASE
-            "#
+            format!(
+                "{} WHERE deleted_at IS NULL ORDER BY service_name COLLATE NOCASE",
+                Self::CRED_SELECT
+            )
         };
-        let mut stmt = conn.prepare(sql).map_err(|_| StorageError::Database)?;
+        let mut stmt = conn.prepare(&sql).map_err(|_| StorageError::Database)?;
         let rows = stmt
             .query_map([], Self::map_credential_row)
             .map_err(|_| StorageError::Database)?;
@@ -484,6 +546,161 @@ impl VaultDb for SqlCipherVaultDb {
         };
         Ok(count as u32)
     }
+
+    fn upsert_policy(&mut self, row: &PolicyRow) -> Result<(), StorageError> {
+        let conn = self.conn()?;
+        conn.execute(
+            r#"
+            INSERT INTO policies (
+                id, name, min_length, max_length, require_uppercase, require_lowercase,
+                require_digit, require_symbol, allow_spaces, forbidden_chars,
+                forbidden_patterns_json, previous_password_count, expiry_days,
+                extra_rules_json, created_at, updated_at
+            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)
+            ON CONFLICT(id) DO UPDATE SET
+                name=excluded.name,
+                min_length=excluded.min_length,
+                max_length=excluded.max_length,
+                require_uppercase=excluded.require_uppercase,
+                require_lowercase=excluded.require_lowercase,
+                require_digit=excluded.require_digit,
+                require_symbol=excluded.require_symbol,
+                allow_spaces=excluded.allow_spaces,
+                forbidden_chars=excluded.forbidden_chars,
+                forbidden_patterns_json=excluded.forbidden_patterns_json,
+                previous_password_count=excluded.previous_password_count,
+                expiry_days=excluded.expiry_days,
+                extra_rules_json=excluded.extra_rules_json,
+                updated_at=excluded.updated_at
+            "#,
+            params![
+                row.id,
+                row.name,
+                row.min_length,
+                row.max_length,
+                row.require_uppercase,
+                row.require_lowercase,
+                row.require_digit,
+                row.require_symbol,
+                row.allow_spaces,
+                row.forbidden_chars,
+                row.forbidden_patterns_json,
+                row.previous_password_count,
+                row.expiry_days,
+                row.extra_rules_json,
+                row.created_at,
+                row.updated_at,
+            ],
+        )
+        .map_err(|_| StorageError::Database)?;
+        Ok(())
+    }
+
+    fn get_policy(&self, id: &str) -> Result<Option<PolicyRow>, StorageError> {
+        let conn = self.conn()?;
+        conn.query_row(
+            r#"
+            SELECT id, name, min_length, max_length, require_uppercase, require_lowercase,
+                   require_digit, require_symbol, allow_spaces, forbidden_chars,
+                   forbidden_patterns_json, previous_password_count, expiry_days,
+                   extra_rules_json, created_at, updated_at
+            FROM policies WHERE id = ?1
+            "#,
+            [id],
+            Self::map_policy_row,
+        )
+        .optional()
+        .map_err(|_| StorageError::Database)
+    }
+
+    fn list_policies(&self) -> Result<Vec<PolicyRow>, StorageError> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT id, name, min_length, max_length, require_uppercase, require_lowercase,
+                       require_digit, require_symbol, allow_spaces, forbidden_chars,
+                       forbidden_patterns_json, previous_password_count, expiry_days,
+                       extra_rules_json, created_at, updated_at
+                FROM policies ORDER BY name COLLATE NOCASE
+                "#,
+            )
+            .map_err(|_| StorageError::Database)?;
+        let rows = stmt
+            .query_map([], Self::map_policy_row)
+            .map_err(|_| StorageError::Database)?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row.map_err(|_| StorageError::Database)?);
+        }
+        Ok(out)
+    }
+
+    fn delete_policy(&mut self, id: &str) -> Result<(), StorageError> {
+        let conn = self.conn()?;
+        let n = conn
+            .execute("DELETE FROM policies WHERE id = ?1", [id])
+            .map_err(|_| StorageError::Database)?;
+        if n == 0 {
+            return Err(StorageError::PolicyNotFound);
+        }
+        Ok(())
+    }
+
+    fn clear_credential_policy(&mut self, policy_id: &str) -> Result<(), StorageError> {
+        let conn = self.conn()?;
+        conn.execute(
+            "UPDATE credentials SET policy_id = NULL, policy_compliant = NULL WHERE policy_id = ?1",
+            [policy_id],
+        )
+        .map_err(|_| StorageError::Database)?;
+        Ok(())
+    }
+
+    fn insert_password_fp_history(
+        &mut self,
+        id: &str,
+        credential_id: &str,
+        password_fp: &str,
+        created_at: &str,
+    ) -> Result<(), StorageError> {
+        let conn = self.conn()?;
+        conn.execute(
+            r#"
+            INSERT INTO password_fp_history (id, credential_id, password_fp, created_at)
+            VALUES (?1, ?2, ?3, ?4)
+            "#,
+            params![id, credential_id, password_fp, created_at],
+        )
+        .map_err(|_| StorageError::Database)?;
+        Ok(())
+    }
+
+    fn list_password_fp_history(
+        &self,
+        credential_id: &str,
+        limit: u32,
+    ) -> Result<Vec<String>, StorageError> {
+        let conn = self.conn()?;
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT password_fp FROM password_fp_history
+                WHERE credential_id = ?1
+                ORDER BY rowid DESC
+                LIMIT ?2
+                "#,
+            )
+            .map_err(|_| StorageError::Database)?;
+        let rows = stmt
+            .query_map(params![credential_id, limit as i64], |r| r.get(0))
+            .map_err(|_| StorageError::Database)?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row.map_err(|_| StorageError::Database)?);
+        }
+        Ok(out)
+    }
 }
 
 impl Drop for SqlCipherVaultDb {
@@ -504,7 +721,7 @@ mod tests {
         let key = [7u8; 32];
         let mut db = SqlCipherVaultDb::new(path.clone());
         db.create(&key).unwrap();
-        assert_eq!(db.schema_version().unwrap(), SCHEMA_VERSION_V2);
+        assert_eq!(db.schema_version().unwrap(), SCHEMA_VERSION_V3);
         db.close();
 
         let mut db2 = SqlCipherVaultDb::new(path.clone());

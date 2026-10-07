@@ -1,7 +1,7 @@
 # Índice Fase 0 — Arquitectura y seguridad
 
-**Estado:** Fases 0–4 ✅ · **Fase 5 (políticas) pendiente de aprobación**  
-**Regla:** no iniciar Fase 5 sin aprobación explícita
+**Estado:** Fases 0–5 ✅ · **Fase 6 (generador) pendiente de aprobación**  
+**Regla:** no iniciar Fase 6 sin aprobación explícita
 
 Los documentos canónicos detallados están en este Agent Store. El repo Git lleva el mismo conjunto bajo `docs/` para la PR.
 
@@ -44,6 +44,6 @@ Los documentos canónicos detallados están en este Agent Store. El repo Git lle
 
 ## Gate actual
 
-**Fase 4 hecha** (CRUD credenciales cifradas). **No iniciar Fase 5** sin aprobación de Sebastián.
+**Fase 5 hecha** (motor de políticas + UI). **No iniciar Fase 6** sin aprobación de Sebastián.
 
 Pendientes: D5 plataforma, D6 auditoría, D7 historial secrets, D8 keystore, D9 passphrase backup.

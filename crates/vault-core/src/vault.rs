@@ -50,7 +50,9 @@ impl From<StorageError> for VaultError {
     fn from(value: StorageError) -> Self {
         match value {
             StorageError::AlreadyExists => VaultError::AlreadyExists,
-            StorageError::NotFound | StorageError::CredentialNotFound => VaultError::NotFound,
+            StorageError::NotFound
+            | StorageError::CredentialNotFound
+            | StorageError::PolicyNotFound => VaultError::NotFound,
             StorageError::CorruptOrWrongKey => VaultError::Integrity,
             _ => VaultError::Storage,
         }

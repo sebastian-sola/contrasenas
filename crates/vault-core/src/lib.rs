@@ -1,6 +1,6 @@
 //! Núcleo de la bóveda Contraseñas.
 //!
-//! Fase 4: criptografía + bóveda + CRUD de credenciales (AEAD de campos).
+//! Fase 5: criptografía + bóveda + CRUD credenciales + motor de políticas.
 
 #![forbid(unsafe_code)]
 
@@ -9,6 +9,7 @@ pub mod backoff;
 pub mod credentials;
 pub mod crypto;
 pub mod paths;
+pub mod policy;
 pub mod recovery;
 pub mod session;
 pub mod vault;
@@ -22,6 +23,9 @@ pub use crypto::{
     KdfParams, ProductionCryptoEngine, CRYPTO_FORMAT_VERSION,
 };
 pub use paths::AppPaths;
+pub use policy::{
+    apply_expiry_from_policy, validate_password, PasswordPolicy, PolicyInput, PolicyValidation,
+};
 pub use recovery::{
     generate_recovery_code, unlock_dek_with_recovery, ProductionRecoveryKit, RecoveryError,
     RecoveryKit, StubRecoveryKit,
@@ -30,19 +34,19 @@ pub use session::{SessionError, SessionState, VaultSession};
 pub use vault::{CreateVaultResult, Vault, VaultError};
 pub use vault_header::{VaultFileHeader, VAULT_SCHEMA_VERSION};
 
-/// Versión de esquema lógico de la bóveda en disco (v2 = credenciales completas).
-pub const APP_SCHEMA_VERSION: u16 = 2;
+/// Versión de esquema lógico de la bóveda en disco (v3 = políticas).
+pub const APP_SCHEMA_VERSION: u16 = 3;
 
 /// Fase de desarrollo implementada en este crate.
-pub const IMPLEMENTED_PHASE: u8 = 4;
+pub const IMPLEMENTED_PHASE: u8 = 5;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn phase_is_four() {
-        assert_eq!(IMPLEMENTED_PHASE, 4);
+    fn phase_is_five() {
+        assert_eq!(IMPLEMENTED_PHASE, 5);
     }
 
     #[test]

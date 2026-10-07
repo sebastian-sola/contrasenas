@@ -1,6 +1,6 @@
 # Seguridad — Contraseñas
 
-**Fase 4 · Crypto + bóveda + CRUD credenciales (AEAD de campos)**
+**Fase 5 · Crypto + bóveda + CRUD + motor de políticas**
 
 Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas (§35).
 
@@ -23,6 +23,7 @@ Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas
 | Backoff + auto-lock 5 min | ✅ Fase 3 |
 | Kit emergencia persistido (wrap en cabecera) | ✅ Fase 3 (código solo al crear) |
 | CRUD credenciales | ✅ Fase 4 (password/notas AEAD; historial solo metadatos) |
+| Motor de políticas §8 | ✅ Fase 5 (validación sin loguear plaintext; huellas previas) |
 
 Errores (`CryptoError`, `SessionError`, `RecoveryError`): mensajes genéricos; **nunca** incluyen passwords, claves ni ciphertext interpretado como secreto en logs de error.
 

@@ -36,6 +36,7 @@ pub struct Credential {
     pub status: String,
     pub strength_score: Option<i32>,
     pub policy_compliant: Option<bool>,
+    pub policy_id: Option<String>,
     pub deleted: bool,
     /// Cuántos servicios usan la misma contraseña (sin listar cuáles).
     pub reuse_count: u32,
@@ -56,6 +57,8 @@ pub struct CredentialSummary {
     pub expiry_color: String,
     pub next_renewal_at: Option<String>,
     pub reuse_count: u32,
+    pub policy_id: Option<String>,
+    pub policy_compliant: Option<bool>,
 }
 
 /// Datos de creación/edición desde la UI.
@@ -76,6 +79,7 @@ pub struct CredentialInput {
     pub notes: Option<String>,
     pub next_renewal_at: Option<String>,
     pub expiry_policy: Option<String>,
+    pub policy_id: Option<String>,
     pub reason: Option<String>,
 }
 
@@ -226,6 +230,8 @@ impl crate::vault::Vault {
                 expiry_color: color,
                 next_renewal_at: row.next_renewal_at,
                 reuse_count: if reuse > 1 { reuse } else { 0 },
+                policy_id: row.policy_id,
+                policy_compliant: row.policy_compliant.map(|v| v != 0),
             });
         }
         Ok(out)
@@ -266,7 +272,13 @@ impl crate::vault::Vault {
             _ => None,
         };
         let fp = password_fingerprint(&input.password);
-        let status = compute_status(input.next_renewal_at.as_deref(), false);
+        let (compliant, next_renewal) = self.eval_policy_for_save(
+            input.policy_id.as_deref(),
+            &input.password,
+            None,
+            input.next_renewal_at.clone(),
+        )?;
+        let status = compute_status(next_renewal.as_deref(), false);
         let row = CredentialRow {
             id: id.clone(),
             service_name: input.service_name.clone(),
@@ -284,13 +296,14 @@ impl crate::vault::Vault {
             created_at: now.clone(),
             updated_at: now.clone(),
             password_changed_at: Some(now.clone()),
-            next_renewal_at: input.next_renewal_at.clone(),
+            next_renewal_at: next_renewal,
             expiry_policy: input.expiry_policy.clone(),
             status: Some(status),
             strength_score: None,
-            policy_compliant: None,
+            policy_compliant: compliant.map(i32::from),
             password_fp: Some(fp),
             deleted_at: None,
+            policy_id: input.policy_id.clone(),
         };
         {
             let db = self.db_mut()?;
@@ -331,7 +344,19 @@ impl crate::vault::Vault {
             _ => None,
         };
         let fp = password_fingerprint(&input.password);
-        let status = compute_status(input.next_renewal_at.as_deref(), false);
+        if pw_changed {
+            if let Some(old_fp) = &existing.password_fp {
+                let db = self.db_mut()?;
+                db.insert_password_fp_history(&new_id(), id, old_fp, &now)?;
+            }
+        }
+        let (compliant, next_renewal) = self.eval_policy_for_save(
+            input.policy_id.as_deref(),
+            &input.password,
+            Some(id),
+            input.next_renewal_at.clone(),
+        )?;
+        let status = compute_status(next_renewal.as_deref(), false);
         let mut fields: Vec<String> = vec!["service_name".into()];
         if pw_changed {
             fields.push("password".into());
@@ -357,13 +382,14 @@ impl crate::vault::Vault {
             } else {
                 existing.password_changed_at
             },
-            next_renewal_at: input.next_renewal_at,
+            next_renewal_at: next_renewal,
             expiry_policy: input.expiry_policy,
             status: Some(status),
             strength_score: existing.strength_score,
-            policy_compliant: existing.policy_compliant,
+            policy_compliant: compliant.map(i32::from),
             password_fp: Some(fp),
             deleted_at: None,
+            policy_id: input.policy_id,
         };
         {
             let db = self.db_mut()?;
@@ -382,6 +408,22 @@ impl crate::vault::Vault {
         }
         drop(old_pw);
         self.get_credential(id)
+    }
+
+    fn eval_policy_for_save(
+        &mut self,
+        policy_id: Option<&str>,
+        password: &str,
+        credential_id: Option<&str>,
+        next_renewal_at: Option<String>,
+    ) -> Result<(Option<bool>, Option<String>), VaultError> {
+        let Some(pid) = policy_id else {
+            return Ok((None, next_renewal_at));
+        };
+        let validation = self.validate_against_policy(pid, password, credential_id)?;
+        let policy = self.get_policy(pid)?;
+        let renewal = crate::policy::apply_expiry_from_policy(next_renewal_at, policy.expiry_days);
+        Ok((Some(validation.compliant), renewal))
     }
 
     pub fn delete_credential(&mut self, id: &str) -> Result<(), VaultError> {
@@ -476,6 +518,7 @@ fn row_to_credential(
         status,
         strength_score: row.strength_score,
         policy_compliant: row.policy_compliant.map(|v| v != 0),
+        policy_id: row.policy_id,
         deleted,
         reuse_count: if reuse_total > 1 { reuse_total } else { 0 },
         expiry_color: color,
@@ -530,6 +573,7 @@ mod tests {
                 notes: Some("nota privada".into()),
                 next_renewal_at: Some((now_unix() + 40 * 86400).to_string()),
                 expiry_policy: Some("90d".into()),
+                policy_id: None,
                 reason: Some("alta inicial".into()),
             })
             .unwrap();
@@ -552,6 +596,7 @@ mod tests {
                 notes: None,
                 next_renewal_at: Some((now_unix() + 5 * 86400).to_string()),
                 expiry_policy: None,
+                policy_id: None,
                 reason: None,
             })
             .unwrap();
@@ -583,6 +628,7 @@ mod tests {
                 notes: None,
                 next_renewal_at: None,
                 expiry_policy: None,
+                policy_id: None,
                 reason: Some("rotación".into()),
             },
         )

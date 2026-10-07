@@ -446,6 +446,95 @@ button.danger {
   opacity: 0.75;
 }
 
+.tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+}
+
+.tab {
+  margin: 0;
+  background: transparent;
+  border: 1px solid var(--stroke);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.tab.active {
+  background: rgba(61, 139, 253, 0.18);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.badge.compliant {
+  background: rgba(62, 207, 142, 0.15);
+  border-color: var(--exp-green);
+  color: var(--exp-green);
+}
+
+.badge.noncompliant {
+  background: rgba(232, 93, 93, 0.15);
+  border-color: var(--exp-red);
+  color: var(--exp-red);
+}
+
+select {
+  border-radius: 10px;
+  border: 1px solid var(--stroke);
+  padding: 0.7rem 0.9rem;
+  font: inherit;
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.checks {
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem 0.75rem;
+  margin: 0.25rem 0;
+}
+
+.checks legend {
+  padding: 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.checks label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.checks input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.validate-box {
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  border-radius: 10px;
+  border: 1px dashed var(--stroke);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.validate-ok {
+  color: var(--exp-green);
+  margin: 0.5rem 0 0;
+}
+
+.validate-bad {
+  color: var(--exp-red);
+  margin: 0.5rem 0 0;
+}
+
 @media (max-width: 800px) {
   .vault-grid {
     grid-template-columns: 1fr;

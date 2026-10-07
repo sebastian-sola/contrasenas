@@ -1,6 +1,6 @@
 # Plan de desarrollo por fases — Contraseñas
 
-**Estado:** Fase 4 ✅ completada · **Fase 5 pendiente de aprobación**
+**Estado:** Fase 5 ✅ completada · **Fase 6 pendiente de aprobación**
 
 Alineado con requisito §36. Prioridad: seguridad de secretos. Entre fases: checklist §37 + revisión de amenazas §39.
 
@@ -62,16 +62,20 @@ Argon2id + AES-256-GCM + DEK wrap + kit crypto en memoria. Tests verdes.
 **Gate:** ✅ test `crud_reuse_and_no_plaintext_on_disk` (create/update/delete/restore; sin plaintext en DB locked).  
 **Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup` (34+ tests).  
 **UI:** capturas `media/fase4-lista.png`, `media/fase4-detalle.png`.  
-**Siguiente:** Fase 5 (políticas) **solo tras aprobación explícita**.
+**Siguiente:** Fase 5 hecha.
 
 ---
 
-## FASE 5 — Políticas
+## FASE 5 — Políticas ✅ (esta entrega)
 
-- Motor de políticas §8; validación; UI Políticas.
-- Indicadores compliant / no.
+- Motor §8: min/max, upper/lower/digit/symbol, espacios, chars/patrones prohibidos, reuso de N anteriores (huellas), caducidad días, `extra_rules_json` extensible.
+- Validación sin loguear plaintext; schema SQLCipher v3 (`policies` + `password_fp_history` + `policy_id`).
+- CRUD UI Políticas; asociar política a credencial; badges cumple / no cumple.
+- Capturas: `media/fase5-politicas.png`, `media/fase5-validacion.png`.
 
-**Gate:** tests de reglas.
+**Gate:** ✅ tests de reglas + CRUD/attach compliance; sin secretos en resultado de validación.  
+**Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup`  
+**Siguiente:** Fase 6 (generador) **solo tras aprobación explícita**.
 
 ---
 

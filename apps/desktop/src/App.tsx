@@ -24,6 +24,8 @@ type CredentialSummary = {
   expiryColor: string;
   nextRenewalAt: string | null;
   reuseCount: number;
+  policyId: string | null;
+  policyCompliant: boolean | null;
 };
 
 type Credential = {
@@ -48,6 +50,7 @@ type Credential = {
   status: string;
   strengthScore: number | null;
   policyCompliant: boolean | null;
+  policyId: string | null;
   deleted: boolean;
   reuseCount: number;
   expiryColor: string;
@@ -63,6 +66,30 @@ type HistoryEntry = {
   reason: string | null;
 };
 
+type PasswordPolicy = {
+  id: string;
+  name: string;
+  minLength: number;
+  maxLength: number;
+  requireUppercase: boolean;
+  requireLowercase: boolean;
+  requireDigit: boolean;
+  requireSymbol: boolean;
+  allowSpaces: boolean;
+  forbiddenChars: string;
+  forbiddenPatterns: string[];
+  previousPasswordCount: number;
+  expiryDays: number | null;
+  extraRulesJson: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type PolicyValidation = {
+  compliant: boolean;
+  violations: string[];
+};
+
 type FormState = {
   serviceName: string;
   username: string;
@@ -73,7 +100,25 @@ type FormState = {
   environment: string;
   notes: string;
   nextRenewalAt: string;
+  policyId: string;
   reason: string;
+};
+
+type PolicyForm = {
+  name: string;
+  minLength: number;
+  maxLength: number;
+  requireUppercase: boolean;
+  requireLowercase: boolean;
+  requireDigit: boolean;
+  requireSymbol: boolean;
+  allowSpaces: boolean;
+  forbiddenChars: string;
+  forbiddenPatterns: string;
+  previousPasswordCount: number;
+  expiryDays: string;
+  extraRulesJson: string;
+  testPassword: string;
 };
 
 const emptyForm = (): FormState => ({
@@ -86,7 +131,25 @@ const emptyForm = (): FormState => ({
   environment: "",
   notes: "",
   nextRenewalAt: "",
+  policyId: "",
   reason: "",
+});
+
+const emptyPolicyForm = (): PolicyForm => ({
+  name: "",
+  minLength: 12,
+  maxLength: 64,
+  requireUppercase: true,
+  requireLowercase: true,
+  requireDigit: true,
+  requireSymbol: true,
+  allowSpaces: false,
+  forbiddenChars: "",
+  forbiddenPatterns: "",
+  previousPasswordCount: 3,
+  expiryDays: "90",
+  extraRulesJson: "",
+  testPassword: "",
 });
 
 function opt(value: string): string | null {
@@ -114,6 +177,23 @@ function expiryLabel(color: string): string {
   }
 }
 
+function violationLabel(code: string): string {
+  const map: Record<string, string> = {
+    min_length: "Demasiado corta",
+    max_length: "Demasiado larga",
+    require_uppercase: "Falta mayúscula",
+    require_lowercase: "Falta minúscula",
+    require_digit: "Falta número",
+    require_symbol: "Falta símbolo",
+    spaces_not_allowed: "No se permiten espacios",
+    forbidden_chars: "Caracteres prohibidos",
+    forbidden_patterns: "Patrón prohibido",
+    previous_password_reuse: "Ya usada antes",
+    min_unique_chars: "Pocos caracteres distintos",
+  };
+  return map[code] ?? code;
+}
+
 function App() {
   const [info, setInfo] = useState<PhaseInfo | null>(null);
   const [password, setPassword] = useState("");
@@ -121,7 +201,9 @@ function App() {
   const [recoveryOnce, setRecoveryOnce] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const [tab, setTab] = useState<"creds" | "policies">("creds");
   const [items, setItems] = useState<CredentialSummary[]>([]);
+  const [policies, setPolicies] = useState<PasswordPolicy[]>([]);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Credential | null>(null);
@@ -130,6 +212,13 @@ function App() {
   const [mode, setMode] = useState<"list" | "create" | "edit">("list");
   const [form, setForm] = useState<FormState>(emptyForm());
   const [busy, setBusy] = useState(false);
+
+  const [policyMode, setPolicyMode] = useState<"list" | "create" | "edit">(
+    "list",
+  );
+  const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null);
+  const [policyForm, setPolicyForm] = useState<PolicyForm>(emptyPolicyForm());
+  const [validation, setValidation] = useState<PolicyValidation | null>(null);
 
   async function refresh() {
     try {
@@ -142,8 +231,8 @@ function App() {
         "Modo vista previa web: la bóveda real solo funciona en la app de escritorio.",
       );
       setInfo({
-        phase: 4,
-        schemaVersion: 2,
+        phase: 5,
+        schemaVersion: 3,
         sessionState: "locked",
         storageBackend: "sqlcipher_aead",
         recoverySummary:
@@ -169,6 +258,15 @@ function App() {
     }
   }
 
+  async function loadPolicies() {
+    try {
+      const list = await invoke<PasswordPolicy[]>("policies_list");
+      setPolicies(list);
+    } catch (err) {
+      setMessage(String(err));
+    }
+  }
+
   async function loadDetail(id: string) {
     try {
       const cred = await invoke<Credential>("credentials_get", { id });
@@ -188,6 +286,7 @@ function App() {
       const data = await refresh();
       if (data?.sessionState === "unlocked") {
         await loadList("");
+        await loadPolicies();
       }
     })();
   }, []);
@@ -225,6 +324,7 @@ function App() {
       setPassword("");
       await refresh();
       await loadList("");
+      await loadPolicies();
       setMode("list");
       setSelectedId(null);
       setDetail(null);
@@ -240,11 +340,14 @@ function App() {
       await invoke("lock_session");
       setMessage("Bóveda bloqueada. Claves borradas de memoria.");
       setItems([]);
+      setPolicies([]);
       setDetail(null);
       setHistory([]);
       setSelectedId(null);
       setMode("list");
       setForm(emptyForm());
+      setPolicyMode("list");
+      setValidation(null);
       await refresh();
     } catch (err) {
       setMessage(String(err));
@@ -252,6 +355,7 @@ function App() {
   }
 
   function openCreate() {
+    setTab("creds");
     setMode("create");
     setSelectedId(null);
     setDetail(null);
@@ -259,6 +363,7 @@ function App() {
     setForm({
       ...emptyForm(),
       nextRenewalAt: daysFromNowInput(45),
+      policyId: policies[0]?.id ?? "",
     });
     setShowPassword(true);
   }
@@ -276,6 +381,7 @@ function App() {
       environment: detail.environment ?? "",
       notes: detail.notes ?? "",
       nextRenewalAt: detail.nextRenewalAt ?? "",
+      policyId: detail.policyId ?? "",
       reason: "",
     });
     setShowPassword(false);
@@ -304,6 +410,7 @@ function App() {
       notes: opt(form.notes),
       nextRenewalAt: opt(form.nextRenewalAt),
       expiryPolicy: null as string | null,
+      policyId: opt(form.policyId),
       reason: opt(form.reason),
     };
     try {
@@ -364,27 +471,187 @@ function App() {
     await loadList(query);
   }
 
+  function openPolicyCreate() {
+    setPolicyMode("create");
+    setSelectedPolicyId(null);
+    setPolicyForm(emptyPolicyForm());
+    setValidation(null);
+  }
+
+  function openPolicyEdit(p: PasswordPolicy) {
+    setPolicyMode("edit");
+    setSelectedPolicyId(p.id);
+    setPolicyForm({
+      name: p.name,
+      minLength: p.minLength,
+      maxLength: p.maxLength,
+      requireUppercase: p.requireUppercase,
+      requireLowercase: p.requireLowercase,
+      requireDigit: p.requireDigit,
+      requireSymbol: p.requireSymbol,
+      allowSpaces: p.allowSpaces,
+      forbiddenChars: p.forbiddenChars,
+      forbiddenPatterns: p.forbiddenPatterns.join(", "),
+      previousPasswordCount: p.previousPasswordCount,
+      expiryDays: p.expiryDays != null ? String(p.expiryDays) : "",
+      extraRulesJson: p.extraRulesJson ?? "",
+      testPassword: "",
+    });
+    setValidation(null);
+  }
+
+  function policyInputFromForm() {
+    const days = policyForm.expiryDays.trim();
+    return {
+      name: policyForm.name.trim(),
+      minLength: policyForm.minLength,
+      maxLength: policyForm.maxLength,
+      requireUppercase: policyForm.requireUppercase,
+      requireLowercase: policyForm.requireLowercase,
+      requireDigit: policyForm.requireDigit,
+      requireSymbol: policyForm.requireSymbol,
+      allowSpaces: policyForm.allowSpaces,
+      forbiddenChars: policyForm.forbiddenChars,
+      forbiddenPatterns: policyForm.forbiddenPatterns
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      previousPasswordCount: policyForm.previousPasswordCount,
+      expiryDays: days ? Number(days) : null,
+      extraRulesJson: opt(policyForm.extraRulesJson),
+    };
+  }
+
+  async function onSavePolicy(e: FormEvent) {
+    e.preventDefault();
+    if (!policyForm.name.trim()) {
+      setMessage("El nombre de la política es obligatorio.");
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const input = policyInputFromForm();
+      const saved =
+        policyMode === "edit" && selectedPolicyId
+          ? await invoke<PasswordPolicy>("policies_update", {
+              id: selectedPolicyId,
+              input,
+            })
+          : await invoke<PasswordPolicy>("policies_create", { input });
+      setMessage(
+        policyMode === "edit" ? "Política actualizada." : "Política creada.",
+      );
+      setPolicyMode("list");
+      setSelectedPolicyId(saved.id);
+      await loadPolicies();
+    } catch (err) {
+      setMessage(String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDeletePolicy(id: string) {
+    if (!window.confirm("¿Eliminar esta política? Se desasociará de las credenciales.")) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await invoke("policies_delete", { id });
+      setMessage("Política eliminada.");
+      setPolicyMode("list");
+      setSelectedPolicyId(null);
+      await loadPolicies();
+      await loadList(query);
+    } catch (err) {
+      setMessage(String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onValidateTest() {
+    const pid = selectedPolicyId;
+    if (!pid && policyMode !== "edit") {
+      setMessage("Guarda la política primero para probarla, o edita una existente.");
+      return;
+    }
+    const id = pid ?? selectedPolicyId;
+    if (!id || !policyForm.testPassword) {
+      setMessage("Escribe una contraseña de prueba.");
+      return;
+    }
+    try {
+      // Si estamos editando sin guardar, validamos con reglas guardadas en disco.
+      const result = await invoke<PolicyValidation>("policies_validate", {
+        policyId: id,
+        password: policyForm.testPassword,
+        credentialId: null,
+      });
+      setValidation(result);
+      setMessage(
+        result.compliant
+          ? "Cumple la política."
+          : "No cumple la política.",
+      );
+    } catch (err) {
+      setMessage(String(err));
+    }
+  }
+
+  function policyName(id: string | null | undefined): string {
+    if (!id) return "Sin política";
+    return policies.find((p) => p.id === id)?.name ?? "Política";
+  }
+
   if (info?.sessionState === "unlocked") {
     return (
       <main className="vault-app">
         <header className="vault-top">
           <div>
             <p className="brand">Contraseñas</p>
-            <h1>Tus credenciales</h1>
+            <h1>{tab === "creds" ? "Tus credenciales" : "Políticas"}</h1>
             <p className="lede">
-              Fase {info.phase}: guardar, buscar y editar. La contraseña se
-              oculta; el reuso solo muestra cuántas veces se repite.
+              Fase {info.phase}: reglas de contraseña por servicio e indicadores
+              de cumplimiento.
             </p>
           </div>
           <div className="vault-actions">
             <button type="button" className="secondary" onClick={onLock}>
               Bloquear
             </button>
-            <button type="button" onClick={openCreate}>
-              Nueva
-            </button>
+            {tab === "creds" ? (
+              <button type="button" onClick={openCreate}>
+                Nueva
+              </button>
+            ) : (
+              <button type="button" onClick={openPolicyCreate}>
+                Nueva política
+              </button>
+            )}
           </div>
         </header>
+
+        <nav className="tabs" aria-label="Secciones">
+          <button
+            type="button"
+            className={tab === "creds" ? "tab active" : "tab"}
+            onClick={() => setTab("creds")}
+          >
+            Credenciales
+          </button>
+          <button
+            type="button"
+            className={tab === "policies" ? "tab active" : "tab"}
+            onClick={() => {
+              setTab("policies");
+              void loadPolicies();
+            }}
+          >
+            Políticas
+          </button>
+        </nav>
 
         {message && (
           <p className="toast banner" role="status">
@@ -392,317 +659,623 @@ function App() {
           </p>
         )}
 
-        <div className="vault-grid">
-          <section className="panel list-panel" aria-label="Lista">
-            <form className="search-row" onSubmit={onSearch}>
-              <label htmlFor="search" className="sr-only">
-                Buscar
-              </label>
-              <input
-                id="search"
-                value={query}
-                onChange={(e) => setQuery(e.currentTarget.value)}
-                placeholder="Buscar servicio, usuario…"
-              />
-              <button type="submit" className="secondary">
-                Buscar
-              </button>
-            </form>
-
-            {items.length === 0 ? (
-              <p className="empty">
-                No hay credenciales todavía. Pulsa <strong>Nueva</strong> para
-                guardar la primera.
-              </p>
-            ) : (
-              <ul className="cred-list">
-                {items.map((item) => (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      className={
-                        selectedId === item.id ? "cred-row active" : "cred-row"
-                      }
-                      onClick={() => void selectItem(item.id)}
-                    >
-                      <span className="cred-name">{item.serviceName}</span>
-                      <span className="cred-meta">
-                        {item.username || "sin usuario"}
-                        {item.reuseCount > 1
-                          ? ` · reusada ${item.reuseCount}×`
-                          : ""}
-                      </span>
-                      <span
-                        className={`dot expiry-${item.expiryColor}`}
-                        title={expiryLabel(item.expiryColor)}
-                      />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="panel detail-panel" aria-label="Detalle">
-            {(mode === "create" || mode === "edit") && (
-              <form className="cred-form" onSubmit={onSaveCredential}>
-                <h2>{mode === "create" ? "Nueva credencial" : "Editar"}</h2>
-                <label htmlFor="svc">Servicio *</label>
+        {tab === "creds" && (
+          <div className="vault-grid">
+            <section className="panel list-panel" aria-label="Lista">
+              <form className="search-row" onSubmit={onSearch}>
+                <label htmlFor="search" className="sr-only">
+                  Buscar
+                </label>
                 <input
-                  id="svc"
-                  value={form.serviceName}
-                  onChange={(e) =>
-                    setForm({ ...form, serviceName: e.currentTarget.value })
-                  }
-                  required
+                  id="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.currentTarget.value)}
+                  placeholder="Buscar servicio, usuario…"
                 />
-                <label htmlFor="user">Usuario</label>
-                <input
-                  id="user"
-                  value={form.username}
-                  onChange={(e) =>
-                    setForm({ ...form, username: e.currentTarget.value })
-                  }
-                />
-                <label htmlFor="pwd">Contraseña *</label>
-                <div className="pw-row">
-                  <input
-                    id="pwd"
-                    type={showPassword ? "text" : "password"}
-                    value={form.password}
-                    onChange={(e) =>
-                      setForm({ ...form, password: e.currentTarget.value })
-                    }
-                    required
-                    autoComplete="new-password"
-                  />
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => setShowPassword((v) => !v)}
-                  >
-                    {showPassword ? "Ocultar" : "Mostrar"}
-                  </button>
-                </div>
-                <label htmlFor="url">URL</label>
-                <input
-                  id="url"
-                  value={form.url}
-                  onChange={(e) =>
-                    setForm({ ...form, url: e.currentTarget.value })
-                  }
-                />
-                <label htmlFor="email">Correo</label>
-                <input
-                  id="email"
-                  value={form.email}
-                  onChange={(e) =>
-                    setForm({ ...form, email: e.currentTarget.value })
-                  }
-                />
-                <div className="two-col">
-                  <div>
-                    <label htmlFor="cat">Categoría</label>
-                    <input
-                      id="cat"
-                      value={form.category}
-                      onChange={(e) =>
-                        setForm({ ...form, category: e.currentTarget.value })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="env">Entorno</label>
-                    <input
-                      id="env"
-                      value={form.environment}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          environment: e.currentTarget.value,
-                        })
-                      }
-                      placeholder="prod / test"
-                    />
-                  </div>
-                </div>
-                <label htmlFor="renew">Caducidad (unix seconds)</label>
-                <input
-                  id="renew"
-                  value={form.nextRenewalAt}
-                  onChange={(e) =>
-                    setForm({ ...form, nextRenewalAt: e.currentTarget.value })
-                  }
-                  placeholder="opcional"
-                />
-                <div className="chip-row">
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() =>
-                      setForm({
-                        ...form,
-                        nextRenewalAt: daysFromNowInput(45),
-                      })
-                    }
-                  >
-                    +45 días
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() =>
-                      setForm({
-                        ...form,
-                        nextRenewalAt: daysFromNowInput(7),
-                      })
-                    }
-                  >
-                    +7 días
-                  </button>
-                </div>
-                <label htmlFor="notes">Notas</label>
-                <textarea
-                  id="notes"
-                  rows={3}
-                  value={form.notes}
-                  onChange={(e) =>
-                    setForm({ ...form, notes: e.currentTarget.value })
-                  }
-                />
-                {mode === "edit" && (
-                  <>
-                    <label htmlFor="reason">Motivo del cambio</label>
-                    <input
-                      id="reason"
-                      value={form.reason}
-                      onChange={(e) =>
-                        setForm({ ...form, reason: e.currentTarget.value })
-                      }
-                      placeholder="opcional"
-                    />
-                  </>
-                )}
-                <div className="form-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => {
-                      setMode("list");
-                      setForm(emptyForm());
-                      if (selectedId) void loadDetail(selectedId);
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                  <button type="submit" disabled={busy}>
-                    Guardar
-                  </button>
-                </div>
+                <button type="submit" className="secondary">
+                  Buscar
+                </button>
               </form>
-            )}
 
-            {mode === "list" && !detail && (
-              <p className="empty">
-                Elige una credencial de la lista o crea una nueva.
-              </p>
-            )}
-
-            {mode === "list" && detail && (
-              <div className="detail-view">
-                <div className="detail-head">
-                  <h2>{detail.serviceName}</h2>
-                  <span className={`badge expiry-${detail.expiryColor}`}>
-                    {detail.status} · {expiryLabel(detail.expiryColor)}
-                  </span>
-                </div>
-                <dl className="detail-fields">
-                  <div>
-                    <dt>Usuario</dt>
-                    <dd>{detail.username || "—"}</dd>
-                  </div>
-                  <div className="wide">
-                    <dt>Contraseña</dt>
-                    <dd className="pw-row">
-                      <code>
-                        {showPassword ? detail.password : "••••••••••••"}
-                      </code>
+              {items.length === 0 ? (
+                <p className="empty">
+                  No hay credenciales todavía. Pulsa <strong>Nueva</strong>.
+                </p>
+              ) : (
+                <ul className="cred-list">
+                  {items.map((item) => (
+                    <li key={item.id}>
                       <button
                         type="button"
-                        className="secondary"
-                        onClick={() => setShowPassword((v) => !v)}
+                        className={
+                          selectedId === item.id
+                            ? "cred-row active"
+                            : "cred-row"
+                        }
+                        onClick={() => void selectItem(item.id)}
                       >
-                        {showPassword ? "Ocultar" : "Mostrar"}
-                      </button>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>URL</dt>
-                    <dd>{detail.url || "—"}</dd>
-                  </div>
-                  <div>
-                    <dt>Correo</dt>
-                    <dd>{detail.email || "—"}</dd>
-                  </div>
-                  <div>
-                    <dt>Categoría</dt>
-                    <dd>{detail.category || "—"}</dd>
-                  </div>
-                  <div>
-                    <dt>Entorno</dt>
-                    <dd>{detail.environment || "—"}</dd>
-                  </div>
-                  <div>
-                    <dt>Reutilización</dt>
-                    <dd>
-                      {detail.reuseCount > 1
-                        ? `Misma contraseña en ${detail.reuseCount} servicios`
-                        : "No reusada"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Caducidad</dt>
-                    <dd>{detail.nextRenewalAt || "—"}</dd>
-                  </div>
-                  <div className="wide">
-                    <dt>Notas</dt>
-                    <dd>{detail.notes || "—"}</dd>
-                  </div>
-                </dl>
-                <div className="form-actions">
-                  <button type="button" onClick={openEdit}>
-                    Editar
-                  </button>
-                  <button
-                    type="button"
-                    className="danger"
-                    onClick={() => void onDelete()}
-                    disabled={busy}
-                  >
-                    Archivar
-                  </button>
-                </div>
-                {history.length > 0 && (
-                  <div className="history">
-                    <h3>Historial (sin contraseñas antiguas)</h3>
-                    <ul>
-                      {history.map((h) => (
-                        <li key={h.id}>
-                          <strong>{h.action}</strong>
-                          {h.fieldsChanged.length
-                            ? `: ${h.fieldsChanged.join(", ")}`
+                        <span className="cred-name">{item.serviceName}</span>
+                        <span className="cred-meta">
+                          {item.username || "sin usuario"}
+                          {item.reuseCount > 1
+                            ? ` · reusada ${item.reuseCount}×`
                             : ""}
-                          {h.reason ? ` — ${h.reason}` : ""}
-                          <span className="hist-time"> · {h.timestamp}</span>
-                        </li>
-                      ))}
-                    </ul>
+                          {item.policyCompliant === true
+                            ? " · cumple"
+                            : item.policyCompliant === false
+                              ? " · no cumple"
+                              : ""}
+                        </span>
+                        <span
+                          className={`dot expiry-${item.expiryColor}`}
+                          title={expiryLabel(item.expiryColor)}
+                        />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section className="panel detail-panel" aria-label="Detalle">
+              {(mode === "create" || mode === "edit") && (
+                <form className="cred-form" onSubmit={onSaveCredential}>
+                  <h2>{mode === "create" ? "Nueva credencial" : "Editar"}</h2>
+                  <label htmlFor="svc">Servicio *</label>
+                  <input
+                    id="svc"
+                    value={form.serviceName}
+                    onChange={(e) =>
+                      setForm({ ...form, serviceName: e.currentTarget.value })
+                    }
+                    required
+                  />
+                  <label htmlFor="user">Usuario</label>
+                  <input
+                    id="user"
+                    value={form.username}
+                    onChange={(e) =>
+                      setForm({ ...form, username: e.currentTarget.value })
+                    }
+                  />
+                  <label htmlFor="pwd">Contraseña *</label>
+                  <div className="pw-row">
+                    <input
+                      id="pwd"
+                      type={showPassword ? "text" : "password"}
+                      value={form.password}
+                      onChange={(e) =>
+                        setForm({ ...form, password: e.currentTarget.value })
+                      }
+                      required
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => setShowPassword((v) => !v)}
+                    >
+                      {showPassword ? "Ocultar" : "Mostrar"}
+                    </button>
                   </div>
-                )}
-              </div>
-            )}
-          </section>
-        </div>
+                  <label htmlFor="pol">Política</label>
+                  <select
+                    id="pol"
+                    value={form.policyId}
+                    onChange={(e) =>
+                      setForm({ ...form, policyId: e.currentTarget.value })
+                    }
+                  >
+                    <option value="">Sin política</option>
+                    {policies.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  <label htmlFor="url">URL</label>
+                  <input
+                    id="url"
+                    value={form.url}
+                    onChange={(e) =>
+                      setForm({ ...form, url: e.currentTarget.value })
+                    }
+                  />
+                  <label htmlFor="email">Correo</label>
+                  <input
+                    id="email"
+                    value={form.email}
+                    onChange={(e) =>
+                      setForm({ ...form, email: e.currentTarget.value })
+                    }
+                  />
+                  <div className="two-col">
+                    <div>
+                      <label htmlFor="cat">Categoría</label>
+                      <input
+                        id="cat"
+                        value={form.category}
+                        onChange={(e) =>
+                          setForm({ ...form, category: e.currentTarget.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="env">Entorno</label>
+                      <input
+                        id="env"
+                        value={form.environment}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            environment: e.currentTarget.value,
+                          })
+                        }
+                        placeholder="prod / test"
+                      />
+                    </div>
+                  </div>
+                  <label htmlFor="renew">Caducidad (unix seconds)</label>
+                  <input
+                    id="renew"
+                    value={form.nextRenewalAt}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        nextRenewalAt: e.currentTarget.value,
+                      })
+                    }
+                    placeholder="opcional / la política puede fijarla"
+                  />
+                  <label htmlFor="notes">Notas</label>
+                  <textarea
+                    id="notes"
+                    rows={3}
+                    value={form.notes}
+                    onChange={(e) =>
+                      setForm({ ...form, notes: e.currentTarget.value })
+                    }
+                  />
+                  {mode === "edit" && (
+                    <>
+                      <label htmlFor="reason">Motivo del cambio</label>
+                      <input
+                        id="reason"
+                        value={form.reason}
+                        onChange={(e) =>
+                          setForm({ ...form, reason: e.currentTarget.value })
+                        }
+                        placeholder="opcional"
+                      />
+                    </>
+                  )}
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => {
+                        setMode("list");
+                        setForm(emptyForm());
+                        if (selectedId) void loadDetail(selectedId);
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                    <button type="submit" disabled={busy}>
+                      Guardar
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {mode === "list" && !detail && (
+                <p className="empty">
+                  Elige una credencial de la lista o crea una nueva.
+                </p>
+              )}
+
+              {mode === "list" && detail && (
+                <div className="detail-view">
+                  <div className="detail-head">
+                    <h2>{detail.serviceName}</h2>
+                    <span className={`badge expiry-${detail.expiryColor}`}>
+                      {detail.status} · {expiryLabel(detail.expiryColor)}
+                    </span>
+                    {detail.policyCompliant === true && (
+                      <span className="badge compliant">Cumple política</span>
+                    )}
+                    {detail.policyCompliant === false && (
+                      <span className="badge noncompliant">
+                        No cumple política
+                      </span>
+                    )}
+                  </div>
+                  <dl className="detail-fields">
+                    <div>
+                      <dt>Usuario</dt>
+                      <dd>{detail.username || "—"}</dd>
+                    </div>
+                    <div className="wide">
+                      <dt>Contraseña</dt>
+                      <dd className="pw-row">
+                        <code>
+                          {showPassword ? detail.password : "••••••••••••"}
+                        </code>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => setShowPassword((v) => !v)}
+                        >
+                          {showPassword ? "Ocultar" : "Mostrar"}
+                        </button>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Política</dt>
+                      <dd>{policyName(detail.policyId)}</dd>
+                    </div>
+                    <div>
+                      <dt>URL</dt>
+                      <dd>{detail.url || "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>Reutilización</dt>
+                      <dd>
+                        {detail.reuseCount > 1
+                          ? `Misma contraseña en ${detail.reuseCount} servicios`
+                          : "No reusada"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Caducidad</dt>
+                      <dd>{detail.nextRenewalAt || "—"}</dd>
+                    </div>
+                    <div className="wide">
+                      <dt>Notas</dt>
+                      <dd>{detail.notes || "—"}</dd>
+                    </div>
+                  </dl>
+                  <div className="form-actions">
+                    <button type="button" onClick={openEdit}>
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => void onDelete()}
+                      disabled={busy}
+                    >
+                      Archivar
+                    </button>
+                  </div>
+                  {history.length > 0 && (
+                    <div className="history">
+                      <h3>Historial (sin contraseñas antiguas)</h3>
+                      <ul>
+                        {history.map((h) => (
+                          <li key={h.id}>
+                            <strong>{h.action}</strong>
+                            {h.fieldsChanged.length
+                              ? `: ${h.fieldsChanged.join(", ")}`
+                              : ""}
+                            {h.reason ? ` — ${h.reason}` : ""}
+                            <span className="hist-time"> · {h.timestamp}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+        {tab === "policies" && (
+          <div className="vault-grid">
+            <section className="panel list-panel" aria-label="Políticas">
+              {policies.length === 0 ? (
+                <p className="empty">
+                  No hay políticas. Crea una (p. ej. «Corporativa») y asígnala a
+                  un servicio.
+                </p>
+              ) : (
+                <ul className="cred-list">
+                  {policies.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        className={
+                          selectedPolicyId === p.id
+                            ? "cred-row active"
+                            : "cred-row"
+                        }
+                        onClick={() => openPolicyEdit(p)}
+                      >
+                        <span className="cred-name">{p.name}</span>
+                        <span className="cred-meta">
+                          {p.minLength}–{p.maxLength} chars
+                          {p.requireSymbol ? " · símbolos" : ""}
+                          {p.expiryDays != null
+                            ? ` · caduca ${p.expiryDays}d`
+                            : ""}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section className="panel detail-panel" aria-label="Editor política">
+              {(policyMode === "create" || policyMode === "edit") && (
+                <form className="cred-form" onSubmit={onSavePolicy}>
+                  <h2>
+                    {policyMode === "create"
+                      ? "Nueva política"
+                      : "Editar política"}
+                  </h2>
+                  <label htmlFor="pname">Nombre *</label>
+                  <input
+                    id="pname"
+                    value={policyForm.name}
+                    onChange={(e) =>
+                      setPolicyForm({
+                        ...policyForm,
+                        name: e.currentTarget.value,
+                      })
+                    }
+                    required
+                  />
+                  <div className="two-col">
+                    <div>
+                      <label htmlFor="pmin">Longitud mín.</label>
+                      <input
+                        id="pmin"
+                        type="number"
+                        min={1}
+                        value={policyForm.minLength}
+                        onChange={(e) =>
+                          setPolicyForm({
+                            ...policyForm,
+                            minLength: Number(e.currentTarget.value),
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="pmax">Longitud máx.</label>
+                      <input
+                        id="pmax"
+                        type="number"
+                        min={1}
+                        value={policyForm.maxLength}
+                        onChange={(e) =>
+                          setPolicyForm({
+                            ...policyForm,
+                            maxLength: Number(e.currentTarget.value),
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <fieldset className="checks">
+                    <legend>Requisitos</legend>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={policyForm.requireUppercase}
+                        onChange={(e) =>
+                          setPolicyForm({
+                            ...policyForm,
+                            requireUppercase: e.currentTarget.checked,
+                          })
+                        }
+                      />{" "}
+                      Mayúsculas
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={policyForm.requireLowercase}
+                        onChange={(e) =>
+                          setPolicyForm({
+                            ...policyForm,
+                            requireLowercase: e.currentTarget.checked,
+                          })
+                        }
+                      />{" "}
+                      Minúsculas
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={policyForm.requireDigit}
+                        onChange={(e) =>
+                          setPolicyForm({
+                            ...policyForm,
+                            requireDigit: e.currentTarget.checked,
+                          })
+                        }
+                      />{" "}
+                      Números
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={policyForm.requireSymbol}
+                        onChange={(e) =>
+                          setPolicyForm({
+                            ...policyForm,
+                            requireSymbol: e.currentTarget.checked,
+                          })
+                        }
+                      />{" "}
+                      Símbolos
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={policyForm.allowSpaces}
+                        onChange={(e) =>
+                          setPolicyForm({
+                            ...policyForm,
+                            allowSpaces: e.currentTarget.checked,
+                          })
+                        }
+                      />{" "}
+                      Permitir espacios
+                    </label>
+                  </fieldset>
+                  <label htmlFor="pforbid">Caracteres prohibidos</label>
+                  <input
+                    id="pforbid"
+                    value={policyForm.forbiddenChars}
+                    onChange={(e) =>
+                      setPolicyForm({
+                        ...policyForm,
+                        forbiddenChars: e.currentTarget.value,
+                      })
+                    }
+                    placeholder="ej. ¡¿"
+                  />
+                  <label htmlFor="ppat">Patrones prohibidos (coma)</label>
+                  <input
+                    id="ppat"
+                    value={policyForm.forbiddenPatterns}
+                    onChange={(e) =>
+                      setPolicyForm({
+                        ...policyForm,
+                        forbiddenPatterns: e.currentTarget.value,
+                      })
+                    }
+                    placeholder="password, 1234"
+                  />
+                  <div className="two-col">
+                    <div>
+                      <label htmlFor="pprev">No reutilizar últimas N</label>
+                      <input
+                        id="pprev"
+                        type="number"
+                        min={0}
+                        value={policyForm.previousPasswordCount}
+                        onChange={(e) =>
+                          setPolicyForm({
+                            ...policyForm,
+                            previousPasswordCount: Number(
+                              e.currentTarget.value,
+                            ),
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="pexp">Caducidad (días)</label>
+                      <input
+                        id="pexp"
+                        value={policyForm.expiryDays}
+                        onChange={(e) =>
+                          setPolicyForm({
+                            ...policyForm,
+                            expiryDays: e.currentTarget.value,
+                          })
+                        }
+                        placeholder="opcional"
+                      />
+                    </div>
+                  </div>
+                  <label htmlFor="pextra">Reglas extra (JSON)</label>
+                  <input
+                    id="pextra"
+                    value={policyForm.extraRulesJson}
+                    onChange={(e) =>
+                      setPolicyForm({
+                        ...policyForm,
+                        extraRulesJson: e.currentTarget.value,
+                      })
+                    }
+                    placeholder='{"min_unique_chars":8}'
+                  />
+
+                  {policyMode === "edit" && selectedPolicyId && (
+                    <div className="validate-box">
+                      <h3>Probar validación</h3>
+                      <label htmlFor="ptestpw">Contraseña de prueba</label>
+                      <div className="pw-row">
+                        <input
+                          id="ptestpw"
+                          type="password"
+                          value={policyForm.testPassword}
+                          onChange={(e) =>
+                            setPolicyForm({
+                              ...policyForm,
+                              testPassword: e.currentTarget.value,
+                            })
+                          }
+                          autoComplete="off"
+                        />
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => void onValidateTest()}
+                        >
+                          Validar
+                        </button>
+                      </div>
+                      {validation && (
+                        <p
+                          className={
+                            validation.compliant
+                              ? "validate-ok"
+                              : "validate-bad"
+                          }
+                        >
+                          {validation.compliant
+                            ? "Cumple"
+                            : `No cumple: ${validation.violations
+                                .map(violationLabel)
+                                .join(", ")}`}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => {
+                        setPolicyMode("list");
+                        setValidation(null);
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                    {policyMode === "edit" && selectedPolicyId && (
+                      <button
+                        type="button"
+                        className="danger"
+                        disabled={busy}
+                        onClick={() => void onDeletePolicy(selectedPolicyId)}
+                      >
+                        Eliminar
+                      </button>
+                    )}
+                    <button type="submit" disabled={busy}>
+                      Guardar
+                    </button>
+                  </div>
+                </form>
+              )}
+              {policyMode === "list" && (
+                <p className="empty">
+                  Elige una política o crea una nueva. Luego asígnala a una
+                  credencial.
+                </p>
+              )}
+            </section>
+          </div>
+        )}
       </main>
     );
   }
@@ -717,8 +1290,8 @@ function App() {
             : "Bóveda bloqueada"}
         </h1>
         <p className="lede">
-          Fase <strong>4</strong>: puedes guardar y editar contraseñas de sitios
-          dentro de la bóveda cifrada.
+          Fase <strong>5</strong>: políticas de contraseña por servicio y
+          comprobación de cumplimiento.
         </p>
 
         {info && !info.vaultExists && info.sessionState === "locked" && (
@@ -782,10 +1355,6 @@ function App() {
             <div>
               <dt>Bóveda en disco</dt>
               <dd>{info.vaultExists ? "sí" : "no"}</dd>
-            </div>
-            <div className="wide">
-              <dt>Kit de emergencia</dt>
-              <dd>{info.recoverySummary}</dd>
             </div>
           </dl>
         )}

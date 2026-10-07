@@ -7,7 +7,7 @@
 //! Para FASE 3 el backend activo por defecto es SQLCipher; este fallback permanece
 //! disponible y se prueba de forma aislada.
 
-use super::rows::{CredentialRow, HistoryRow};
+use super::rows::{CredentialRow, HistoryRow, PolicyRow};
 use super::{StorageBackendKind, StorageError, VaultDb};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -177,6 +177,38 @@ impl VaultDb for BlobVaultDb {
         Err(StorageError::Database)
     }
     fn count_password_fp(&self, _fp: &str, _exclude_id: Option<&str>) -> Result<u32, StorageError> {
+        Err(StorageError::Database)
+    }
+
+    fn upsert_policy(&mut self, _row: &PolicyRow) -> Result<(), StorageError> {
+        Err(StorageError::Database)
+    }
+    fn get_policy(&self, _id: &str) -> Result<Option<PolicyRow>, StorageError> {
+        Err(StorageError::Database)
+    }
+    fn list_policies(&self) -> Result<Vec<PolicyRow>, StorageError> {
+        Err(StorageError::Database)
+    }
+    fn delete_policy(&mut self, _id: &str) -> Result<(), StorageError> {
+        Err(StorageError::Database)
+    }
+    fn clear_credential_policy(&mut self, _policy_id: &str) -> Result<(), StorageError> {
+        Err(StorageError::Database)
+    }
+    fn insert_password_fp_history(
+        &mut self,
+        _id: &str,
+        _credential_id: &str,
+        _password_fp: &str,
+        _created_at: &str,
+    ) -> Result<(), StorageError> {
+        Err(StorageError::Database)
+    }
+    fn list_password_fp_history(
+        &self,
+        _credential_id: &str,
+        _limit: u32,
+    ) -> Result<Vec<String>, StorageError> {
         Err(StorageError::Database)
     }
 }
