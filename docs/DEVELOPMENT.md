@@ -1,6 +1,6 @@
 # Plan de desarrollo por fases — Contraseñas
 
-**Fase 0 · Planificación · Esperar aprobación antes de Fase 1**
+**Estado:** Fase 1 ✅ completada · **Fase 2 pendiente de aprobación**
 
 Alineado con requisito §36. Prioridad: seguridad de secretos. Entre fases: checklist §37 + revisión de amenazas §39.
 
@@ -17,24 +17,25 @@ Alineado con requisito §36. Prioridad: seguridad de secretos. Entre fases: chec
 
 ---
 
-## FASE 0 — Análisis y diseño ✅ (esta entrega)
+## FASE 0 — Análisis y diseño ✅
 
 **Entregables:** threat model, arquitectura, security, database, backup, audit, development, README, project-context.  
-**Gate:** aprobación de Sebastián (stack, DB, recuperación, plataforma, auditoría, historial secrets, keystore).  
-**Prohibido:** código de producción de la app / bóveda.
+**Gate:** ✅ Aprobados D1 (Tauri), D2 (SQLCipher+AEAD), D4 (kit emergencia) — 2026-10-07.
 
 ---
 
-## FASE 1 — Esqueleto de aplicación
+## FASE 1 — Esqueleto de aplicación ✅ (esta entrega)
 
-- Repo Tauri 2 + React/TS + crates vacíos (`vault-core`, `vault-storage`, `vault-backup`).
-- Traits de storage/crypto/audit (interfaces).
-- Data dir OS, `.gitignore`, permisos documentados.
-- Pantalla Bloqueo placeholder (sin crypto real aún) + shell IPC allowlist mínima.
-- CI básica: fmt, clippy, lint TS, test vacío, secret scan.
-- Spike SQLCipher multi-OS; documentar resultado; activar fallback blob si hace falta.
+- Repo Tauri 2 + React/TS + crates (`vault-core`, `vault-storage`, `vault-backup`) con APIs stub.
+- Traits de storage/crypto/audit/recovery (interfaces; sin crypto de producción).
+- Data dir OS documentado, `.gitignore`, permisos.
+- Pantalla Bloqueo placeholder + IPC allowlist mínima.
+- CI básica: fmt, clippy, lint TS, tests stub, secret scan.
+- Spike SQLCipher: documentado como pendiente de build real en Fase 3; trait + fallback blob listo en diseño.
+- Kit de emergencia: diseño en `SECURITY.md` §2.1; stubs solo.
 
-**Gate:** esqueleto arranca offline; sin secretos reales.
+**Gate:** esqueleto compila offline (GUI Tauri best-effort si faltan deps del SO); sin secretos reales.  
+**Siguiente:** Fase 2 **solo tras aprobación explícita**.
 
 ---
 

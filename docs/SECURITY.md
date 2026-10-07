@@ -1,6 +1,6 @@
 # Seguridad — Contraseñas
 
-**Fase 0 · Borrador para aprobación · Sin código de producción**
+**Fase 1 · Diseño aprobado (D1, D2, D4) · Crypto de producción aún no implementada**
 
 Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas (§35).
 
@@ -64,7 +64,43 @@ Master **nunca** en disco, config, logs, URLs, telemetría ni keystore OS en for
 - Master obligatoria.
 - Auto-lock: 1/5/10/15/30/nunca; **default 5 min**. Cierra sesión, wipe razonable, oculta UI.
 - Backoff progresivo tras fallos (ej. 0→0→2→5→15→30→60 s tope); auditar intentos; **sin lockout permanente** sin mecanismo de recuperación aprobado.
-- Recuperación: ver decisión abierta (pérdida total vs kit emergencia). No “preguntas secretas” ni email.
+- Recuperación: **kit de emergencia aprobado (D4)** — ver §2.1. No “preguntas secretas” ni email.
+
+### 2.1 Kit de emergencia (diseño; stubs en Fase 1, crypto real en Fase 2+)
+
+**Qué es (lenguaje sencillo):** al crear la bóveda, la app genera un **código de emergencia de un solo uso de lectura** (frase o clave larga). Sebastián debe **guardarlo fuera del ordenador** (papel en lugar seguro, o medio offline). Si olvida la contraseña maestra, ese código permite recuperar el acceso y elegir una contraseña nueva.
+
+**Qué no es:**
+
+- No es un envío por correo ni un “olvidé mi contraseña” en la nube.
+- **La contraseña maestra nunca se guarda** de forma que se pueda leer después (ni en disco, ni en el kit, ni en el almacén del sistema operativo).
+- El kit **no revela** la master antigua; solo permite **desenvolver la misma clave de datos (DEK)** y volver a envolverla con una master nueva.
+
+**Cómo funciona a alto nivel (diseño):**
+
+```
+Al crear bóveda:
+  DEK aleatoria
+  ├─ envuelta con KEK_master = Argon2id(master)
+  └─ envuelta con KEK_recovery = KDF(código de emergencia)
+  → mostrar código UNA vez → usuario confirma haberlo guardado
+
+Al recuperar:
+  código → KEK_recovery → unwrap DEK → pedir nueva master → wrap con KEK_master nueva
+  (invalidar / rotar código de emergencia tras uso exitoso — política a implementar)
+```
+
+**Riesgos (honestos):**
+
+| Riesgo | Mitigación de diseño |
+|--------|----------------------|
+| Quien robe el kit abre la bóveda | Tratarlo como las llaves de casa; no digitalizar en cloud |
+| Foto / captura del kit en pantalla | UI de revelación única; aviso claro |
+| Pérdida de master **y** del kit | Datos irrecuperables (igual que un disco cifrado sin clave) |
+| Kit débil o predecible | Generación CSPRNG de alta entropía (implementación Fase 2+) |
+
+**Fase 1:** solo documentación + stubs de API (`RecoveryKit` / traits) **sin** generar ni persistir material real.  
+**Fase 2+:** implementación crypto con tests antes de usarlo en la bóveda real.
 
 ---
 

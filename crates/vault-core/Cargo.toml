@@ -1,0 +1,15 @@
+[package]
+name = "vault-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Núcleo de sesión, crypto stubs y políticas de la bóveda Contraseñas"
+publish = false
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+vault-storage = { workspace = true }
+vault-backup = { workspace = true }
+
+[dev-dependencies]

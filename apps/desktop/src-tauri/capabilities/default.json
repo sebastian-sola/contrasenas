@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capacidades mínimas Fase 1 (sin opener/FS/HTTP)",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

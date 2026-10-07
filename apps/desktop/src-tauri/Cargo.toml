@@ -1,0 +1,23 @@
+[package]
+name = "contrasenas-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shell Tauri 2 de Contraseñas"
+authors = ["Proyecto Contraseñas"]
+publish = false
+
+[lib]
+name = "contrasenas_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+vault-core = { workspace = true }
+vault-storage = { workspace = true }
+vault-backup = { workspace = true }

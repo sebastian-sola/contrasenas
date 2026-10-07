@@ -1,0 +1,18 @@
+{
+  "name": "contrasenas",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Gestor local de contraseñas — monorepo Fase 1",
+  "scripts": {
+    "dev:web": "pnpm --dir apps/desktop dev",
+    "build:web": "pnpm --dir apps/desktop build",
+    "lint:web": "pnpm --dir apps/desktop lint",
+    "test:rust": "cargo test -p vault-core -p vault-storage -p vault-backup",
+    "fmt:rust": "cargo fmt --all",
+    "clippy:rust": "cargo clippy -p vault-core -p vault-storage -p vault-backup -- -D warnings",
+    "smoke": "pnpm test:rust && pnpm lint:web"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

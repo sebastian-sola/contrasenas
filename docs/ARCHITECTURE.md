@@ -1,6 +1,6 @@
 # Arquitectura — Contraseñas
 
-**Fase 0 · Borrador para aprobación · Sin código de producción**
+**Fase 1 · Stack y storage aprobados (D1, D2, D4) · Esqueleto en repo**
 
 Documento canónico de arquitectura lógica, stack, componentes, flujos y estructura. Detalle crypto: `SECURITY.md`. Amenazas: `THREAT_MODEL.md`. Datos: `DATABASE.md`.
 
@@ -48,13 +48,15 @@ Sin red, sin telemetría, sin sync en Fases 0–10 salvo requisito explícito po
 | Keystores OS | Plugins / FFI claros | Posible | Nativo | Posible vía libs |
 | Distribución / firma | Soportable (fase posterior) | Maduro | Maduro | Variable |
 
-### Decisión
+### Decisión — **APROBADA (D1)**
 
-**Recomendado: Tauri 2 + núcleo Rust + UI TypeScript/React (+ Tailwind).**
+**Tauri 2 + núcleo Rust + UI TypeScript/React.**
 
-Justificación breve: máxima alineación con prioridad Seguridad/Privacidad (menor superficie que Electron, crypto y wipe en Rust), un solo codebase multiplataforma, IPC restringible, sin runtime Node en producción. Electron se descarta como default por superficie y memoria. Nativo puro pierde mantenibilidad multi-OS. Python+Qt facilita prototipos pero debilita wipe, distribución y postura de dependencias.
+Justificación: máxima alineación con prioridad Seguridad/Privacidad (menor superficie que Electron, crypto y wipe en Rust), un solo codebase multiplataforma, IPC restringible, sin runtime Node en producción. Electron se descartó como default por superficie y memoria. Nativo puro pierde mantenibilidad multi-OS. Python+Qt facilita prototipos pero debilita wipe, distribución y postura de dependencias.
 
 UI: React + TypeScript para pantallas (§13). **Toda** operación de secreto vía comandos Tauri → Rust.
+
+**Recuperación (D4 aprobada):** kit de emergencia (segunda envoltura de la DEK). Diseño en `SECURITY.md` §2.1; stubs en `vault-core::recovery`. La master **nunca** se almacena recuperable.
 
 ---
 
@@ -248,19 +250,24 @@ Ver también `project-context.md` y lista al final de este doc.
 | SQLCipher build/cross-compile | Fricción CI/packaging | Spike en Fase 1; fallback documentado (ver `DATABASE.md`) |
 | WebView retiene strings | Fuga memoria UI | Minimizar tiempo en claro; no cachear passwords |
 | Carpetas cloud sync | Copia de bóveda a cloud | Detectar/avisar paths conocidos |
-| Expectativa “recuperar master” | Pérdida de datos | UX clara al crear bóveda; decisión kit emergencia |
+| Kit de emergencia perdido o robado | Acceso perdido o abuso | UX clara; kit offline; rotación tras uso (F2+) |
 | Auditoría reescribible por dueño | No es forense fuerte | Documentar límites (`AUDIT.md`) |
 | Pliego vs alcance F1–F10 | Scope creep | Fases estrictas; aprobación entre fases |
 
-### Decisiones que requieren aprobación de Sebastián (antes de Fase 1)
+### Decisiones
 
-1. **Stack Tauri 2 + Rust + React/TS** — ¿aprobado?
-2. **Almacenamiento: SQLCipher + AEAD de campos** (vs solo blob AEAD) — ¿aprobado?
-3. **Recuperación master:** ¿pérdida total sin kit, o kit de emergencia (frase/clave impresa)?
-4. **Plataforma inicial:** ¿Windows primero (arquitectura multi-OS) o las tres a la vez?
-5. **Auditoría MVP:** ¿solo AEAD del almacén, o hash encadenado desde el inicio?
-6. **Historial de secretos opt-in:** ¿Fase 7 o explícitamente fuera hasta demanda?
-7. **Keystore OS:** ¿solo opt-in para “rápido unlock” de envoltorio auxiliar, o nada hasta Fase 8?
+| ID | Tema | Estado |
+|----|------|--------|
+| D1 | Stack Tauri 2 + Rust + React/TS | **Aprobado** |
+| D2 | SQLCipher + AEAD (fallback blob) | **Aprobado** |
+| D4 | Kit de emergencia (no solo pérdida total) | **Aprobado** |
+| D5 | Plataforma inicial (Win-first vs las tres) | Pendiente |
+| D6 | Auditoría: solo AEAD vs hash encadenado en MVP | Pendiente |
+| D7 | Historial de secretos opt-in (cuándo) | Pendiente |
+| D8 | Keystore OS opt-in | Pendiente |
+| D9 | Passphrase de backup separada | Pendiente |
+
+**Siguiente gate:** aprobación explícita antes de **Fase 2** (crypto real).
 
 ---
 

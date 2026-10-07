@@ -1,7 +1,7 @@
 # Índice Fase 0 — Arquitectura y seguridad
 
-**Estado:** borrador completo para revisión de Sebastián  
-**Regla:** sin código de producción hasta aprobación explícita → Fase 1
+**Estado:** Fase 0 aprobada (D1, D2, D4) · Fase 1 esqueleto · **Fase 2 pendiente de aprobación**  
+**Regla:** no iniciar crypto de producción (Fase 2) sin aprobación explícita
 
 Los documentos canónicos detallados están en este Agent Store. El repo Git lleva el mismo conjunto bajo `docs/` para la PR.
 
@@ -36,16 +36,14 @@ Los documentos canónicos detallados están en este Agent Store. El repo Git lle
 
 ---
 
-## Recomendación en una línea
+## Stack (aprobado)
 
-**Tauri 2 + Rust (`vault-core`) + UI React/TypeScript; SQLCipher + AES-256-GCM de campos; Argon2id; 100 % offline.**
+**Tauri 2 + Rust (`vault-core`) + UI React/TypeScript; SQLCipher + AES-256-GCM de campos; Argon2id; kit de emergencia; 100 % offline.**
 
 ---
 
-## Top decisiones que bloquean Fase 1
+## Gate actual
 
-1. ¿Aprobar stack Tauri 2 + Rust + React/TS?  
-2. ¿Aprobar SQLCipher + AEAD (con fallback blob si el build falla)?  
-3. ¿Recuperación ante olvido de master: pérdida total vs kit de emergencia?  
+**Fase 1 hecha** (esqueleto). **No iniciar Fase 2** sin aprobación de Sebastián.
 
-(Ver lista completa en `ARCHITECTURE.md` §10 y `project-context.md`.)
+Pendientes no bloqueantes de F1: D5 plataforma, D6 auditoría, D7 historial secrets, D8 keystore, D9 passphrase backup.

@@ -1,0 +1,53 @@
+# Dependencies & build
+node_modules/
+dist/
+target/
+apps/desktop/dist/
+apps/desktop/src-tauri/target/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# Local env / editor
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.sw?
+*.suo
+
+# === Secretos / bóveda / backups — NUNCA en Git ===
+*.cpvault
+*.cpbak
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+vault.dat
+vault.header
+**/backups/
+!docs/**
+.local-data/
+data/
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+master-password*
+recovery-kit*
+emergency-kit*
+
+# OS / tooling
+Thumbs.db
+.cargo-cache/

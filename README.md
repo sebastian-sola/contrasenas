@@ -1,43 +1,69 @@
 # Contraseñas
 
-Gestor de contraseñas y secretos de **escritorio local**, offline-first. Seguridad y privacidad por encima de la comodidad.
+Aplicación de **escritorio** para guardar contraseñas y datos de acceso **solo en tu ordenador**.  
+No envía datos a Internet. La seguridad va por delante de la comodidad.
 
-> **Fase 0 (actual):** solo análisis y diseño. **No hay código de aplicación todavía.**  
-> Hay que aprobar el plan antes de la Fase 1 (esqueleto).
+## En qué punto estamos
 
-## Stack propuesto
+**Fase 1 — esqueleto.** Ya existe la estructura del proyecto (pantalla de bloqueo de prueba, piezas internas vacías).  
+**Todavía no** se crean bóvedas reales ni se guardan contraseñas de verdad.
 
-**Tauri 2 + núcleo criptográfico/bóveda en Rust + UI React/TypeScript**  
-Almacén: **SQLCipher + AES-256-GCM en campos sensibles**, KDF **Argon2id**.
+La siguiente etapa (Fase 2) será la criptografía real, y **solo empezará cuando Sebastián lo apruebe**.
 
-Detalle y comparativa (Electron / nativo / Python+Qt): [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+## Qué se ha decidido (aprobado)
 
-## Documentación Fase 0
+- Tecnología: Tauri 2 + Rust + React/TypeScript.
+- Guardado: base cifrada (SQLCipher) más cifrado extra de los campos secretos.
+- Si olvidas la contraseña maestra: habrá un **kit de emergencia** (un código para guardar en papel / lugar seguro). La contraseña maestra **nunca** se guarda de forma que se pueda leer después.
 
-| Documento | Contenido |
-|-----------|-----------|
-| [`docs/arquitectura-seguridad.md`](docs/arquitectura-seguridad.md) | Índice de la presentación Fase 0 |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Arquitectura, stack, diagramas, flujos, deps, riesgos |
-| [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) | Modelo de amenazas |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | Modelo criptográfico, hardening, clipboard, OS keystores |
-| [`docs/DATABASE.md`](docs/DATABASE.md) | Decisión SQLCipher vs cifrado de campos |
-| [`docs/BACKUP.md`](docs/BACKUP.md) | Backups cifrados versionados (`backup_version`) |
-| [`docs/AUDIT.md`](docs/AUDIT.md) | Auditoría cifrada y anti-manipulación |
-| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Plan F0–F10 |
-| [`docs/project-context.md`](docs/project-context.md) | Decisiones durables |
-| [`docs/requisitos.md`](docs/requisitos.md) | Pliego §1–39 |
+Detalle técnico: carpeta [`docs/`](docs/).
 
-Los mismos documentos viven como canónicos en el Agent Store del proyecto; este repo es el espejo para revisión en PR.
+## Cómo probar el esqueleto (para quien prepare el entorno)
 
-## Principios
+Necesitas: Node 20+, pnpm, Rust estable. En Linux, para la ventana de escritorio completa, también las dependencias gráficas de Tauri ([guía](https://tauri.app/start/prerequisites/)).
 
-- Sin telemetría ni red en el diseño base.
-- Contraseña maestra nunca almacenada (tampoco en keystores OS de forma recuperable).
-- Historial por defecto = solo metadatos.
-- Sin afirmaciones de “100 % seguro”.
+```bash
+# Comprobaciones rápidas (sin abrir la ventana gráfica)
+pnpm --dir apps/desktop install
+pnpm smoke
+# equivalente: cargo test de los crates + typecheck del frontend
+```
 
-## Próximo paso
+```bash
+# Vista previa solo del interfaz en el navegador (sin Tauri)
+pnpm --dir apps/desktop dev
+```
 
-Revisar decisiones abiertas en `docs/ARCHITECTURE.md` §10 y aprobar → **Fase 1**.
+```bash
+# App de escritorio completa (requiere deps gráficas del sistema)
+pnpm --dir apps/desktop tauri dev
+```
 
-No ejecutar la app aún: no hay binario que arrancar en esta fase.
+> En Linux hace falta instalar las libs gráficas de Tauri (p. ej. `libwebkit2gtk-4.1-dev`, `librsvg2-dev`, … — ver [prerequisites](https://tauri.app/start/prerequisites/)). Sin ellas, `tauri dev` falla; igual puedes validar con `pnpm smoke` (tests Rust + typecheck web). En este agente ya se comprobó `cargo check -p contrasenas-desktop` tras instalar esas deps.
+
+## Estructura del proyecto
+
+```
+apps/desktop/          → interfaz + shell Tauri
+crates/vault-core/     → sesión, crypto (stubs), kit emergencia (stubs)
+crates/vault-storage/  → almacén (stubs SQLCipher / fallback)
+crates/vault-backup/   → backups (stubs)
+docs/                  → plan de seguridad y fases
+```
+
+## Documentación
+
+| Documento | Para qué |
+|-----------|----------|
+| [docs/arquitectura-seguridad.md](docs/arquitectura-seguridad.md) | Índice del plan |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitectura y stack |
+| [docs/SECURITY.md](docs/SECURITY.md) | Cifrado, kit de emergencia, límites |
+| [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) | Amenazas |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Fases F0–F10 |
+| [docs/project-context.md](docs/project-context.md) | Decisiones del proyecto |
+
+## Importante
+
+- No hay telemetría.
+- No subas nunca ficheros de bóveda, backups ni códigos de emergencia a Git.
+- Fase 2 (crypto real) **pendiente de aprobación**.

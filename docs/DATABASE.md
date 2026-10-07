@@ -109,6 +109,8 @@ Versión + checksums.
 
 ---
 
-## 7. Decisión pendiente de aprobación
+## 7. Decisión — **APROBADA (D2)**
 
-¿Confirma Sebastián **SQLCipher + AEAD de campos** como estrategia, con trait de storage y fallback a blob AEAD si el build bloquea un OS prioritario?
+SQLCipher + AEAD de campos, con trait de storage y fallback a blob AEAD si el build bloquea un OS prioritario.
+
+**Fase 1:** stubs en `crates/vault-storage`; nota de spike en `docs/SQLCIPHER_SPIKE.md`. Sin enlace nativo aún (para no romper CI).
