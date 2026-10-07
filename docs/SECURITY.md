@@ -1,6 +1,6 @@
 # Seguridad — Contraseñas
 
-**Fase 3 · Crypto + bóveda en disco (SQLCipher); sin CRUD de credenciales**
+**Fase 4 · Crypto + bóveda + CRUD credenciales (AEAD de campos)**
 
 Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas (§35).
 
@@ -22,7 +22,7 @@ Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas
 | Persistencia bóveda / SQLCipher | ✅ Fase 3 (`Vault`, `vault.header`, `vault.dat`) |
 | Backoff + auto-lock 5 min | ✅ Fase 3 |
 | Kit emergencia persistido (wrap en cabecera) | ✅ Fase 3 (código solo al crear) |
-| CRUD credenciales | ❌ Fase 4 |
+| CRUD credenciales | ✅ Fase 4 (password/notas AEAD; historial solo metadatos) |
 
 Errores (`CryptoError`, `SessionError`, `RecoveryError`): mensajes genéricos; **nunca** incluyen passwords, claves ni ciphertext interpretado como secreto en logs de error.
 

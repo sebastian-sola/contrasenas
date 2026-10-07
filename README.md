@@ -5,10 +5,11 @@ No envía datos a Internet. La seguridad va por delante de la comodidad.
 
 ## En qué punto estamos
 
-**Fase 3 — bóveda en el disco.** Ya puedes crear y abrir una caja fuerte cifrada en tu ordenador.  
-**Todavía no** se guardan las contraseñas de cada sitio (eso es la fase 4).
+**Fase 4 — credenciales.** Ya puedes crear una bóveda cifrada y **guardar, buscar, ver y editar** contraseñas de sitios (password oculta por defecto; reuso solo como número).
 
-La siguiente etapa (Fase 4) será guardar y editar credenciales, y **solo empezará cuando Sebastián lo apruebe**.
+La siguiente etapa (Fase 5 — políticas de contraseñas) **solo empezará cuando Sebastián lo apruebe**.
+
+> Todo el desarrollo hasta ahora está en la máquina del agente cloud / este repositorio. **Nada se ha instalado en el ordenador personal de Sebastián.**
 
 ## Qué se ha decidido (aprobado)
 
@@ -18,7 +19,7 @@ La siguiente etapa (Fase 4) será guardar y editar credenciales, y **solo empeza
 
 Detalle técnico: carpeta [`docs/`](docs/).
 
-## Cómo probar el esqueleto (para quien prepare el entorno)
+## Cómo probar (para quien prepare el entorno)
 
 Necesitas: Node 20+, pnpm, Rust estable. En Linux, para la ventana de escritorio completa, también las dependencias gráficas de Tauri ([guía](https://tauri.app/start/prerequisites/)).
 
@@ -45,8 +46,8 @@ pnpm --dir apps/desktop tauri dev
 
 ```
 apps/desktop/          → interfaz + shell Tauri
-crates/vault-core/     → sesión, crypto (stubs), kit emergencia (stubs)
-crates/vault-storage/  → almacén (stubs SQLCipher / fallback)
+crates/vault-core/     → sesión, crypto, bóveda, CRUD credenciales
+crates/vault-storage/  → SQLCipher + AEAD / fallback
 crates/vault-backup/   → backups (stubs)
 docs/                  → plan de seguridad y fases
 ```
@@ -66,5 +67,5 @@ docs/                  → plan de seguridad y fases
 
 - No hay telemetría.
 - No subas nunca ficheros de bóveda, backups ni códigos de emergencia a Git.
-- Fase 4 (credenciales) **pendiente de aprobación**.
-- Comprobar bóveda: `cargo test -p vault-core -p vault-storage -p vault-backup`
+- Fase 5 (políticas) **pendiente de aprobación**.
+- Comprobar bóveda + CRUD: `cargo test -p vault-core -p vault-storage -p vault-backup`

@@ -1,9 +1,10 @@
-//! Shell Tauri — Fase 3: bóveda en disco (create/unlock/lock); sin CRUD.
+//! Shell Tauri — Fase 4: bóveda + CRUD de credenciales.
 
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use vault_backup::{BackupService, StubBackupService};
+use vault_core::credentials::{Credential, CredentialInput, CredentialSummary, HistoryEntry};
 use vault_core::recovery::{ProductionRecoveryKit, RecoveryKit};
 use vault_core::session::SessionState;
 use vault_core::{AppPaths, Vault, APP_SCHEMA_VERSION, IMPLEMENTED_PHASE};
@@ -43,40 +44,43 @@ fn backend_label(kind: StorageBackendKind) -> &'static str {
 }
 
 fn default_data_dir() -> PathBuf {
-    // En desktop real usaremos path de Tauri; aquí: subcarpeta local de desarrollo.
     std::env::temp_dir().join("contrasenas-dev-data")
 }
 
-#[tauri::command]
-fn get_phase_info(state: tauri::State<'_, Mutex<AppState>>) -> Result<PhaseInfo, String> {
+fn with_vault_mut<T>(
+    state: &Mutex<AppState>,
+    f: impl FnOnce(&mut Vault) -> Result<T, String>,
+) -> Result<T, String> {
     let mut guard = state
         .lock()
         .map_err(|_| "estado interno bloqueado".to_string())?;
-    let recovery = ProductionRecoveryKit;
-    let backup = StubBackupService;
-
     if guard.vault.is_none() {
-        let paths = AppPaths::from_data_dir(guard.data_dir.clone());
-        let mut v = Vault::new(paths);
+        let mut v = Vault::new(AppPaths::from_data_dir(guard.data_dir.clone()));
         if v.exists() {
             let _ = v.open_locked();
         }
         guard.vault = Some(v);
     }
+    f(guard.vault.as_mut().unwrap())
+}
 
-    let vault = guard.vault.as_ref().unwrap();
-    let backend = vault.backend().unwrap_or(StorageBackendKind::SqlCipherAead);
-
-    Ok(PhaseInfo {
-        phase: IMPLEMENTED_PHASE,
-        schema_version: APP_SCHEMA_VERSION,
-        session_state: session_label(vault.state()),
-        storage_backend: backend_label(backend),
-        recovery_summary: recovery.design_summary().to_string(),
-        backup_format_version: backup.format_version(),
-        data_dir_hint: guard.data_dir.display().to_string(),
-        production_crypto: true,
-        vault_exists: vault.exists(),
+#[tauri::command]
+fn get_phase_info(state: tauri::State<'_, Mutex<AppState>>) -> Result<PhaseInfo, String> {
+    let recovery = ProductionRecoveryKit;
+    let backup = StubBackupService;
+    with_vault_mut(&state, |vault| {
+        let backend = vault.backend().unwrap_or(StorageBackendKind::SqlCipherAead);
+        Ok(PhaseInfo {
+            phase: IMPLEMENTED_PHASE,
+            schema_version: APP_SCHEMA_VERSION,
+            session_state: session_label(vault.state()),
+            storage_backend: backend_label(backend),
+            recovery_summary: recovery.design_summary().to_string(),
+            backup_format_version: backup.format_version(),
+            data_dir_hint: "(data-dir)".into(),
+            production_crypto: true,
+            vault_exists: vault.exists(),
+        })
     })
 }
 
@@ -85,22 +89,17 @@ fn vault_create(
     state: tauri::State<'_, Mutex<AppState>>,
     master_password: String,
 ) -> Result<String, String> {
-    let mut guard = state
-        .lock()
-        .map_err(|_| "estado interno bloqueado".to_string())?;
-    if guard.vault.is_none() {
-        guard.vault = Some(Vault::new(AppPaths::from_data_dir(guard.data_dir.clone())));
-    }
-    let vault = guard.vault.as_mut().unwrap();
-    let result = vault
-        .create(master_password.as_bytes(), true)
-        .map_err(|e| e.to_string())?;
+    let result = with_vault_mut(&state, |vault| {
+        vault
+            .create(master_password.as_bytes(), true)
+            .map_err(|e| e.to_string())
+    });
     drop(master_password);
-    let code = result
+    let created = result?;
+    Ok(created
         .recovery_code
         .map(|c| c.to_string())
-        .unwrap_or_default();
-    Ok(code)
+        .unwrap_or_default())
 }
 
 #[tauri::command]
@@ -108,32 +107,95 @@ fn try_unlock(
     state: tauri::State<'_, Mutex<AppState>>,
     master_password: String,
 ) -> Result<(), String> {
-    let mut guard = state
-        .lock()
-        .map_err(|_| "estado interno bloqueado".to_string())?;
-    if guard.vault.is_none() {
-        let mut v = Vault::new(AppPaths::from_data_dir(guard.data_dir.clone()));
-        v.open_locked().map_err(|e| e.to_string())?;
-        guard.vault = Some(v);
-    }
-    let vault = guard.vault.as_mut().unwrap();
-    if !vault.exists() && vault.header().is_none() {
-        vault.open_locked().map_err(|e| e.to_string())?;
-    }
-    let result = vault.unlock_with_master(master_password.as_bytes());
+    let result = with_vault_mut(&state, |vault| {
+        if vault.header().is_none() {
+            vault.open_locked().map_err(|e| e.to_string())?;
+        }
+        vault
+            .unlock_with_master(master_password.as_bytes())
+            .map_err(|e| e.to_string())
+    });
     drop(master_password);
-    result.map_err(|e| e.to_string())
+    result
 }
 
 #[tauri::command]
 fn lock_session(state: tauri::State<'_, Mutex<AppState>>) -> Result<(), String> {
-    let mut guard = state
-        .lock()
-        .map_err(|_| "estado interno bloqueado".to_string())?;
-    if let Some(vault) = guard.vault.as_mut() {
-        vault.lock().map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    with_vault_mut(&state, |vault| vault.lock().map_err(|e| e.to_string()))
+}
+
+#[tauri::command]
+fn credentials_list(
+    state: tauri::State<'_, Mutex<AppState>>,
+    query: Option<String>,
+) -> Result<Vec<CredentialSummary>, String> {
+    with_vault_mut(&state, |vault| {
+        vault
+            .list_credentials(query.as_deref())
+            .map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn credentials_get(
+    state: tauri::State<'_, Mutex<AppState>>,
+    id: String,
+) -> Result<Credential, String> {
+    with_vault_mut(&state, |vault| {
+        vault.get_credential(&id).map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn credentials_create(
+    state: tauri::State<'_, Mutex<AppState>>,
+    input: CredentialInput,
+) -> Result<Credential, String> {
+    with_vault_mut(&state, |vault| {
+        vault.create_credential(input).map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn credentials_update(
+    state: tauri::State<'_, Mutex<AppState>>,
+    id: String,
+    input: CredentialInput,
+) -> Result<Credential, String> {
+    with_vault_mut(&state, |vault| {
+        vault
+            .update_credential(&id, input)
+            .map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn credentials_delete(state: tauri::State<'_, Mutex<AppState>>, id: String) -> Result<(), String> {
+    with_vault_mut(&state, |vault| {
+        vault.delete_credential(&id).map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn credentials_restore(
+    state: tauri::State<'_, Mutex<AppState>>,
+    id: String,
+) -> Result<Credential, String> {
+    with_vault_mut(&state, |vault| {
+        vault.restore_credential(&id).map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn credentials_history(
+    state: tauri::State<'_, Mutex<AppState>>,
+    id: String,
+) -> Result<Vec<HistoryEntry>, String> {
+    with_vault_mut(&state, |vault| {
+        vault
+            .list_credential_history(&id)
+            .map_err(|e| e.to_string())
+    })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -147,7 +209,14 @@ pub fn run() {
             get_phase_info,
             vault_create,
             try_unlock,
-            lock_session
+            lock_session,
+            credentials_list,
+            credentials_get,
+            credentials_create,
+            credentials_update,
+            credentials_delete,
+            credentials_restore,
+            credentials_history
         ])
         .run(tauri::generate_context!())
         .expect("error al arrancar Contraseñas");

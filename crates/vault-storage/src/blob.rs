@@ -7,6 +7,7 @@
 //! Para FASE 3 el backend activo por defecto es SQLCipher; este fallback permanece
 //! disponible y se prueba de forma aislada.
 
+use super::rows::{CredentialRow, HistoryRow};
 use super::{StorageBackendKind, StorageError, VaultDb};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -152,5 +153,30 @@ impl VaultDb for BlobVaultDb {
             .settings
             .insert(key.to_string(), value.to_string());
         Ok(())
+    }
+
+    fn upsert_credential(&mut self, _row: &CredentialRow) -> Result<(), StorageError> {
+        Err(StorageError::Database)
+    }
+    fn get_credential(&self, _id: &str) -> Result<Option<CredentialRow>, StorageError> {
+        Err(StorageError::Database)
+    }
+    fn list_credentials(&self, _include_deleted: bool) -> Result<Vec<CredentialRow>, StorageError> {
+        Err(StorageError::Database)
+    }
+    fn soft_delete_credential(&mut self, _id: &str, _deleted_at: &str) -> Result<(), StorageError> {
+        Err(StorageError::Database)
+    }
+    fn restore_credential(&mut self, _id: &str) -> Result<(), StorageError> {
+        Err(StorageError::Database)
+    }
+    fn insert_history(&mut self, _row: &HistoryRow) -> Result<(), StorageError> {
+        Err(StorageError::Database)
+    }
+    fn list_history(&self, _credential_id: &str) -> Result<Vec<HistoryRow>, StorageError> {
+        Err(StorageError::Database)
+    }
+    fn count_password_fp(&self, _fp: &str, _exclude_id: Option<&str>) -> Result<u32, StorageError> {
+        Err(StorageError::Database)
     }
 }

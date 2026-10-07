@@ -1,6 +1,6 @@
 # Plan de desarrollo por fases — Contraseñas
 
-**Estado:** Fase 3 ✅ completada · **Fase 4 pendiente de aprobación**
+**Estado:** Fase 4 ✅ completada · **Fase 5 pendiente de aprobación**
 
 Alineado con requisito §36. Prioridad: seguridad de secretos. Entre fases: checklist §37 + revisión de amenazas §39.
 
@@ -35,10 +35,10 @@ Argon2id + AES-256-GCM + DEK wrap + kit crypto en memoria. Tests verdes.
 
 ---
 
-## FASE 3 — Bóveda ✅ (esta entrega)
+## FASE 3 — Bóveda ✅
 
 - Create / open / lock / unlock / close en disco.
-- Backend **SQLCipher** (bundled) + AEAD de campos previsto; clave DB = HKDF(DEK). Fallback blob disponible en trait.
+- Backend **SQLCipher** (bundled) + AEAD de campos; clave DB = HKDF(DEK). Fallback blob disponible en trait.
 - Cabecera pública `vault.header` (crypto + backoff + schema).
 - Backoff progresivo; auto-lock default 5 min (`auto_lock_secs = 300`).
 - Wipe DEK al lock/close; master nunca en claro en disco (test).
@@ -46,21 +46,23 @@ Argon2id + AES-256-GCM + DEK wrap + kit crypto en memoria. Tests verdes.
 - Schema v1 + scaffolding de migración; copia preventiva a `backups/`.
 - Permisos 0o700/0o600 en Unix.
 
-**Gate:** ✅ tests create/open/lock, wrong master, tamper header, backoff, recovery, master not on disk.  
-**Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup`  
-**Siguiente:** Fase 4 (CRUD credenciales) **solo tras aprobación explícita**.
+**Gate:** ✅ tests create/open/lock, wrong master, tamper header, backoff, recovery, master not on disk.
 
 ---
 
-## FASE 4 — Credenciales
+## FASE 4 — Credenciales ✅ (esta entrega)
 
-- CRUD campos §5.
-- Lista / detalle / crear-editar.
-- Password oculta; show/hide; estados de caducidad + colores §12.
-- Búsqueda/filtrado básico.
-- Reutilización: conteo N sin disclosure innecesario.
+- CRUD campos §5 (servicio, usuario, password AEAD, URL, notas, caducidad, etc.).
+- Schema SQLCipher v2 + soft-delete + historial solo metadatos (sin plaintext de passwords antiguas).
+- Lista / detalle / crear-editar en UI; password oculta por defecto con show/hide.
+- Colores de caducidad §12 (verde/amarillo/naranja/rojo) + campo `next_renewal_at`.
+- Búsqueda/filtrado básico; reutilización: conteo N (fingerprint SHA-256) sin listar otros servicios.
+- IPC Tauri: list/get/create/update/delete/restore/history.
 
-**Gate:** tests CRUD; sin plaintext en DB locked.
+**Gate:** ✅ test `crud_reuse_and_no_plaintext_on_disk` (create/update/delete/restore; sin plaintext en DB locked).  
+**Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup` (34+ tests).  
+**UI:** capturas `media/fase4-lista.png`, `media/fase4-detalle.png`.  
+**Siguiente:** Fase 5 (políticas) **solo tras aprobación explícita**.
 
 ---
 

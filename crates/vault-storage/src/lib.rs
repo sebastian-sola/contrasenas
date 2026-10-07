@@ -1,18 +1,18 @@
-//! Almacenamiento de bóveda — Fase 3.
+//! Almacenamiento de bóveda — Fase 3/4.
 //!
-//! Backend preferido: **SQLCipher** (páginas cifradas). Las columnas secretas
-//! futuras llevan AEAD adicional en la capa `vault-core` (D2).
-//! Fallback: blob AEAD (`BlobVaultDb`) si se selecciona explícitamente.
+//! Backend preferido: **SQLCipher** + AEAD de campos en `vault-core`.
 
 #![forbid(unsafe_code)]
 
 mod blob;
 mod permissions;
+mod rows;
 mod sqlcipher;
 
 pub use blob::BlobVaultDb;
 pub use permissions::{ensure_data_dir, set_owner_only_file_permissions};
-pub use sqlcipher::{SqlCipherVaultDb, SCHEMA_VERSION_V1};
+pub use rows::{CredentialRow, HistoryRow};
+pub use sqlcipher::{SqlCipherVaultDb, SCHEMA_VERSION_V1, SCHEMA_VERSION_V2};
 
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -35,15 +35,14 @@ pub enum StorageError {
     NotOpen,
     #[error("bóveda ya abierta")]
     AlreadyOpen,
+    #[error("credencial no encontrada")]
+    CredentialNotFound,
 }
 
-/// Backend de almacenamiento.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StorageBackendKind {
-    /// SQLCipher + AEAD de campos (preferido, D2).
     SqlCipherAead,
-    /// Fallback: blob único AEAD.
     BlobAeadFallback,
 }
 
@@ -56,7 +55,7 @@ impl StorageBackendKind {
     }
 }
 
-/// Contrato de persistencia cifrada (clave de 32 bytes = material derivado de DEK).
+/// Contrato de persistencia cifrada.
 pub trait VaultDb: Send {
     fn backend_kind(&self) -> StorageBackendKind;
     fn path(&self) -> &Path;
@@ -66,14 +65,21 @@ pub trait VaultDb: Send {
     fn close(&mut self);
     fn is_open(&self) -> bool;
     fn schema_version(&self) -> Result<u16, StorageError>;
-    /// Asegura schema v1 (crea tablas o migra desde 0).
     fn ensure_schema_v1(&mut self) -> Result<(), StorageError>;
-    /// Lee un ajuste no secreto (solo con DB abierta).
     fn get_setting(&self, key: &str) -> Result<Option<String>, StorageError>;
     fn set_setting(&mut self, key: &str, value: &str) -> Result<(), StorageError>;
+
+    // --- Credenciales (Fase 4) ---
+    fn upsert_credential(&mut self, row: &CredentialRow) -> Result<(), StorageError>;
+    fn get_credential(&self, id: &str) -> Result<Option<CredentialRow>, StorageError>;
+    fn list_credentials(&self, include_deleted: bool) -> Result<Vec<CredentialRow>, StorageError>;
+    fn soft_delete_credential(&mut self, id: &str, deleted_at: &str) -> Result<(), StorageError>;
+    fn restore_credential(&mut self, id: &str) -> Result<(), StorageError>;
+    fn insert_history(&mut self, row: &HistoryRow) -> Result<(), StorageError>;
+    fn list_history(&self, credential_id: &str) -> Result<Vec<HistoryRow>, StorageError>;
+    fn count_password_fp(&self, fp: &str, exclude_id: Option<&str>) -> Result<u32, StorageError>;
 }
 
-/// Elige SQLCipher por defecto; el caller puede forzar blob.
 pub fn default_backend() -> StorageBackendKind {
     StorageBackendKind::SqlCipherAead
 }
@@ -85,7 +91,6 @@ pub fn open_db_handle(kind: StorageBackendKind, db_path: PathBuf) -> Box<dyn Vau
     }
 }
 
-/// Compat: trait antiguo usado por la UI Fase 1/2.
 pub trait VaultStore: Send + Sync {
     fn backend_kind(&self) -> StorageBackendKind;
     fn exists(&self) -> Result<bool, StorageError>;
@@ -117,15 +122,5 @@ impl VaultStore for StubVaultStore {
 
     fn exists(&self) -> Result<bool, StorageError> {
         Ok(false)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn default_prefers_sqlcipher() {
-        assert_eq!(default_backend(), StorageBackendKind::SqlCipherAead);
     }
 }

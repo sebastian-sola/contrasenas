@@ -1,6 +1,6 @@
 # Contexto de proyecto — Contraseñas
 
-**Actualizado:** 2026-10-07 · Fase 3 (bóveda en disco)
+**Actualizado:** 2026-10-07 · Fase 4 (CRUD credenciales)
 
 ## Qué es
 
@@ -30,8 +30,9 @@ Gestor de contraseñas/secretos de **escritorio local**, offline-first, con prio
 
 ## Estado del trabajo
 
-- **Fases 0–3** ✅.
-- **Siguiente:** Fase 4 (CRUD credenciales) **tras aprobación explícita**.
+- **Fases 0–4** ✅.
+- **Siguiente:** Fase 5 (políticas) **tras aprobación explícita**.
+- **Nota:** todo el trabajo es en la VM/repo del agente cloud; nada instalado en el PC de Sebastián.
 
 ## Rutas canónicas
 

@@ -50,7 +50,7 @@ impl From<StorageError> for VaultError {
     fn from(value: StorageError) -> Self {
         match value {
             StorageError::AlreadyExists => VaultError::AlreadyExists,
-            StorageError::NotFound => VaultError::NotFound,
+            StorageError::NotFound | StorageError::CredentialNotFound => VaultError::NotFound,
             StorageError::CorruptOrWrongKey => VaultError::Integrity,
             _ => VaultError::Storage,
         }
@@ -313,6 +313,13 @@ impl Vault {
 
     pub fn dek(&self) -> Option<&DataEncryptionKey> {
         self.session.dek()
+    }
+
+    pub(crate) fn db_mut(&mut self) -> Result<&mut (dyn VaultDb + '_), VaultError> {
+        match self.db.as_mut() {
+            Some(d) => Ok(d.as_mut()),
+            None => Err(VaultError::Storage),
+        }
     }
 
     fn ensure_header_loaded(&mut self) -> Result<(), VaultError> {
