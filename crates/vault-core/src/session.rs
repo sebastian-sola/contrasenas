@@ -52,6 +52,14 @@ impl VaultSession {
         }
     }
 
+    /// Instala una DEK ya desenvolta (p. ej. tras abrir la bóveda en disco).
+    pub fn from_unlocked_dek(dek: DataEncryptionKey) -> Self {
+        Self {
+            state: SessionState::Unlocked,
+            dek: Some(dek),
+        }
+    }
+
     pub fn state(&self) -> SessionState {
         self.state
     }

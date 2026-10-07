@@ -5,10 +5,10 @@ No envía datos a Internet. La seguridad va por delante de la comodidad.
 
 ## En qué punto estamos
 
-**Fase 2 — criptografía.** Ya existe el “candado” interno (cifrado moderno, pruebas automáticas).  
-**Todavía no** se crean bóvedas guardadas en el disco ni se almacenan tus contraseñas de sitios.
+**Fase 3 — bóveda en el disco.** Ya puedes crear y abrir una caja fuerte cifrada en tu ordenador.  
+**Todavía no** se guardan las contraseñas de cada sitio (eso es la fase 4).
 
-La siguiente etapa (Fase 3) será guardar la bóveda en el ordenador, y **solo empezará cuando Sebastián lo apruebe**.
+La siguiente etapa (Fase 4) será guardar y editar credenciales, y **solo empezará cuando Sebastián lo apruebe**.
 
 ## Qué se ha decidido (aprobado)
 
@@ -66,5 +66,5 @@ docs/                  → plan de seguridad y fases
 
 - No hay telemetría.
 - No subas nunca ficheros de bóveda, backups ni códigos de emergencia a Git.
-- Fase 3 (bóveda en disco) **pendiente de aprobación**.
-- Comprobar crypto: `cargo test -p vault-core`
+- Fase 4 (credenciales) **pendiente de aprobación**.
+- Comprobar bóveda: `cargo test -p vault-core -p vault-storage -p vault-backup`

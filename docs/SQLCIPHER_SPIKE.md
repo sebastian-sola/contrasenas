@@ -1,20 +1,10 @@
-# Spike SQLCipher (Fase 1 — nota)
+# Spike SQLCipher — resultado
 
-**Estado:** pendiente de build real multi-OS.  
-**Decisión aprobada (D2):** SQLCipher + AEAD de campos; fallback blob AEAD si el empaquetado bloquea.
+**Estado:** ✅ superado en Fase 3.
 
-## Qué se hizo en Fase 1
+- Dependencia: `rusqlite` 0.32 con `bundled-sqlcipher-vendored-openssl`.
+- Compila en Linux CI/agente; tests `SqlCipherVaultDb` verdes.
+- Backend por defecto: `StorageBackendKind::SqlCipherAead`.
+- Fallback blob permanece en el trait por si un OS futuro bloquea el build.
 
-- Trait `VaultStore` + `StorageBackendKind::{SqlCipherAead, BlobAeadFallback}` en `crates/vault-storage`.
-- Preferencia por defecto: SQLCipher.
-- **No** se enlazó aún `rusqlite`/`libsqlcipher` (evita romper CI sin deps nativas).
-
-## Qué falta (Fase 3 / spike dedicado)
-
-1. Probar `rusqlite` con feature SQLCipher en Windows (prioridad), Linux y macOS.
-2. Documentar flags de `OPENSSL`/`SQLCIPHER` en el entorno de build.
-3. Si un OS objetivo falla de forma bloqueante: activar `BlobAeadFallback` detrás del mismo trait sin cambiar el modelo de dominio.
-
-## Criterio de éxito del spike
-
-Abrir/crear un fichero cifrado de prueba (sin secretos de usuario) en el OS prioritario y verificar que sin clave no se leen páginas/metadatos útiles.
+Ver `DATABASE.md` §7.

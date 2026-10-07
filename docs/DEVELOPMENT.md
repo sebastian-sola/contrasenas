@@ -1,6 +1,6 @@
 # Plan de desarrollo por fases — Contraseñas
 
-**Estado:** Fase 2 ✅ completada · **Fase 3 pendiente de aprobación**
+**Estado:** Fase 3 ✅ completada · **Fase 4 pendiente de aprobación**
 
 Alineado con requisito §36. Prioridad: seguridad de secretos. Entre fases: checklist §37 + revisión de amenazas §39.
 
@@ -19,49 +19,36 @@ Alineado con requisito §36. Prioridad: seguridad de secretos. Entre fases: chec
 
 ## FASE 0 — Análisis y diseño ✅
 
-**Entregables:** threat model, arquitectura, security, database, backup, audit, development, README, project-context.  
 **Gate:** ✅ Aprobados D1 (Tauri), D2 (SQLCipher+AEAD), D4 (kit emergencia) — 2026-10-07.
 
 ---
 
-## FASE 1 — Esqueleto de aplicación ✅ (esta entrega)
+## FASE 1 — Esqueleto de aplicación ✅
 
-- Repo Tauri 2 + React/TS + crates (`vault-core`, `vault-storage`, `vault-backup`) con APIs stub.
-- Traits de storage/crypto/audit/recovery (interfaces; sin crypto de producción).
-- Data dir OS documentado, `.gitignore`, permisos.
-- Pantalla Bloqueo placeholder + IPC allowlist mínima.
-- CI básica: fmt, clippy, lint TS, tests stub, secret scan.
-- Spike SQLCipher: documentado como pendiente de build real en Fase 3; trait + fallback blob listo en diseño.
-- Kit de emergencia: diseño en `SECURITY.md` §2.1; stubs solo.
-
-**Gate:** ✅ esqueleto listo; crates con tests; frontend typecheck/build; `cargo check -p contrasenas-desktop` OK con deps GUI Linux; sin secretos reales.  
-**Smoke local:** `pnpm --dir apps/desktop install && pnpm smoke` (o `cargo test -p vault-core -p vault-storage -p vault-backup` + `pnpm --dir apps/desktop lint`).  
-**Siguiente:** Fase 2 ✅ (aprobada e implementada).
+Esqueleto Tauri + crates stub + CI + pantalla bloqueo placeholder.
 
 ---
 
 ## FASE 2 — Criptografía ✅
 
-- Argon2id (params v1 versionados; `for_tests` en unitarios), AES-256-GCM, wrap/unwrap DEK, `zeroize`.
-- Cabecera `CryptoHeaderV1` (`format_version`, KDF, salts, wrapped DEK ± recovery).
-- Sesión en memoria: derive → use → wipe.
-- Kit de emergencia a nivel crypto: generar código, wrap/unwrap recovery, rewrap master.
-- Tests verdes en `vault-core` (round-trip, wrong key, tamper, corrupt, KDF/header version, recovery).
-- **Sin** persistencia de bóveda ni CRUD.
-
-**Gate:** ✅ `cargo test -p vault-core` en verde + límites de memoria documentados en `SECURITY.md`.  
-**Siguiente:** Fase 3 **solo tras aprobación explícita**.
+Argon2id + AES-256-GCM + DEK wrap + kit crypto en memoria. Tests verdes.
 
 ---
 
-## FASE 3 — Bóveda
+## FASE 3 — Bóveda ✅ (esta entrega)
 
-- Crear/abrir/lock/unlock.
-- SQLCipher (+ AEAD campos) o fallback aprobado.
-- Header, backoff, auto-lock timer (default 5 min).
-- Migraciones v0→v1 con backup preventivo.
+- Create / open / lock / unlock / close en disco.
+- Backend **SQLCipher** (bundled) + AEAD de campos previsto; clave DB = HKDF(DEK). Fallback blob disponible en trait.
+- Cabecera pública `vault.header` (crypto + backoff + schema).
+- Backoff progresivo; auto-lock default 5 min (`auto_lock_secs = 300`).
+- Wipe DEK al lock/close; master nunca en claro en disco (test).
+- Kit emergencia: `wrapped_dek_recovery` en cabecera; código solo al crear.
+- Schema v1 + scaffolding de migración; copia preventiva a `backups/`.
+- Permisos 0o700/0o600 en Unix.
 
-**Gate:** round-trip bóveda; master no en disco; fallo cerrado ante corrupción.
+**Gate:** ✅ tests create/open/lock, wrong master, tamper header, backoff, recovery, master not on disk.  
+**Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup`  
+**Siguiente:** Fase 4 (CRUD credenciales) **solo tras aprobación explícita**.
 
 ---
 
@@ -154,5 +141,3 @@ F0 → F1 → F2 → F3 → F4 ─┬→ F5 → F6
                               ↓
                          F8 → F9 → F10
 ```
-
-F5/F6 pueden paralelizarse tras F4; F7 puede solaparse parcialmente con F5 si el modelo de datos ya está estable.

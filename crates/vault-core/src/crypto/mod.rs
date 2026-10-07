@@ -5,15 +5,17 @@
 //! - DEK envuelta con KEK derivada de la contraseña maestra
 //! - Wipe best-effort con `zeroize` (límites documentados en `docs/SECURITY.md`)
 //!
-//! **No** persiste bóvedas: eso es Fase 3. Esta capa solo opera en memoria / bytes.
+//! Persistencia de bóveda: orquestada por `crate::vault` (Fase 3).
 
 mod aead;
+mod derive;
 mod header;
 mod kdf;
 mod keys;
 mod wrap;
 
 pub use aead::{decrypt, encrypt, AeadBox};
+pub use derive::derive_db_key;
 pub use header::{CryptoHeaderV1, AEAD_ID_AES256GCM, CRYPTO_FORMAT_VERSION, KDF_ID_ARGON2ID};
 pub use kdf::{derive_kek, KdfParams};
 pub use keys::{

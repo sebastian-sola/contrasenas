@@ -1,6 +1,6 @@
 # Contexto de proyecto — Contraseñas
 
-**Actualizado:** 2026-10-07 · Fase 2 (criptografía)
+**Actualizado:** 2026-10-07 · Fase 3 (bóveda en disco)
 
 ## Qué es
 
@@ -9,10 +9,9 @@ Gestor de contraseñas/secretos de **escritorio local**, offline-first, con prio
 ## Objetivos durables
 
 - Cifrar todo el almacén; master password nunca almacenada (ni de forma recuperable).
-- Kit de emergencia: segunda vía para recuperar acceso si se olvida la master (crypto ✅; disco en Fase 3).
+- Kit de emergencia: wrap de DEK en cabecera; código mostrado una vez al crear.
 - Sin telemetría, sin red innecesaria, dependencias mínimas.
 - Historial default = metadatos; auditoría cifrada sin secretos.
-- Extensible a 2FA real / multi-bóveda / sync **sin** implementarlos ahora.
 - Honestidad: sin claims “100 % seguro”; documentar límites (memoria, SSD, malware root).
 
 ## Prioridad de criterios
@@ -23,29 +22,17 @@ Gestor de contraseñas/secretos de **escritorio local**, offline-first, con prio
 
 | ID | Decisión | Estado |
 |----|----------|--------|
-| D1 | Stack: **Tauri 2 + Rust + React/TS** | **Aprobado** 2026-10-07 |
-| D2 | Storage: **SQLCipher + AEAD de campos**; trait + fallback blob AEAD | **Aprobado** 2026-10-07 |
-| D3 | Crypto: AES-256-GCM + Argon2id (params versionados) + DEK envuelta | **Implementado** Fase 2 |
-| D4 | Recuperación: **kit de emergencia** (no solo pérdida total) | **Aprobado** + crypto capa F2 |
-| D5 | Plataforma: arquitectura multi-OS; **priorizar Windows** si hay que recortar | Propuesta |
-| D6 | Auditoría MVP: AEAD/SQLCipher (A); schema listo para hash encadenado (B) | Propuesta |
-| D7 | Historial de secretos opt-in: **no en MVP temprano** (Fase 7+ si se aprueba) | Propuesta |
-| D8 | Keystore OS: solo auxiliar opt-in; **nunca** master recuperable | Propuesta |
-| D9 | Backup: `.cpbak` con `backup_version`; passphrase = master en MVP | Propuesta |
-| D10 | Reutilización UX: mostrar conteo N; no listar otros servicios si es disclosure innecesario | Aceptado del pliego |
-| D11 | Comunicación con Sebastián: lenguaje sencillo, sin jerga | Preferencia de proyecto |
-
-## No-objetivos (F0–F10)
-
-Sync cloud, telemetría, 2FA simulado, breach-check online, extensión browser, recuperación online de master.
+| D1 | Stack: **Tauri 2 + Rust + React/TS** | **Aprobado** |
+| D2 | Storage: **SQLCipher + AEAD**; fallback blob | **Aprobado + implementado F3** (SQLCipher activo) |
+| D3 | Crypto: AES-256-GCM + Argon2id + DEK | **Implementado** F2 |
+| D4 | Kit de emergencia | **Aprobado + persistencia wrap F3** |
+| D5–D9 | Plataforma / auditoría / historial / keystore / backup passphrase | Propuestas |
 
 ## Estado del trabajo
 
-- **Fase 0** ✅ · **Fase 1** ✅ · **Fase 2** ✅ (crypto en `vault-core`).
-- **Siguiente:** Fase 3 (bóveda en disco) **tras aprobación explícita**.
+- **Fases 0–3** ✅.
+- **Siguiente:** Fase 4 (CRUD credenciales) **tras aprobación explícita**.
 
-## Rutas canónicas (Agent Store)
+## Rutas canónicas
 
-- Índice: `docs/arquitectura-seguridad.md`
-- Pack §28: `ARCHITECTURE`, `SECURITY`, `THREAT_MODEL`, `DATABASE`, `BACKUP`, `AUDIT`, `DEVELOPMENT`
-- Espejo en repo Git: `/workspace/docs/*` + `README.md`
+- Store: `docs/*` · Repo espejo: `/workspace/docs/*` + `README.md`

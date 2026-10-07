@@ -1,7 +1,6 @@
-//! Rutas de datos de la aplicación (diseño Fase 1).
+//! Rutas de datos de la aplicación (Fase 3).
 //!
-//! Los datos reales vivirán fuera del repo, en el data dir del SO.
-//! Nombres poco reveladores; nunca commitear bóvedas ni backups.
+//! Datos fuera del repo, en el data dir del SO. Nombres poco reveladores.
 
 use std::path::PathBuf;
 

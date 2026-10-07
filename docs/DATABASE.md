@@ -1,6 +1,6 @@
 # Base de datos y cifrado en reposo — Contraseñas
 
-**Fase 0 · Decisión de diseño (no implementar aún)**
+**Fase 3 · Implementado: SQLCipher (preferido) + AEAD de campos (capa vault-core)**
 
 Requisito §16: evaluar cifrado de campos vs DB completa vs SQLCipher vs combinación; justificar antes de implementar; minimizar metadatos visibles sin desbloquear.
 
@@ -109,8 +109,17 @@ Versión + checksums.
 
 ---
 
-## 7. Decisión — **APROBADA (D2)**
+## 7. Decisión — **APROBADA (D2) e IMPLEMENTADA (Fase 3)**
 
-SQLCipher + AEAD de campos, con trait de storage y fallback a blob AEAD si el build bloquea un OS prioritario.
+SQLCipher + AEAD de campos (HKDF(DEK) → clave SQLCipher; AEAD de columnas secretas en CRUD Fase 4).
 
-**Fase 1:** stubs en `crates/vault-storage`; nota de spike en `docs/SQLCIPHER_SPIKE.md`. Sin enlace nativo aún (para no romper CI).
+| Pieza | Estado F3 |
+|-------|-----------|
+| `rusqlite` + `bundled-sqlcipher-vendored-openssl` | ✅ compila y tests verdes |
+| Cabecera pública `vault.header` | ✅ crypto + backoff + schema |
+| DB `vault.dat` (SQLCipher) | ✅ schema v1 (meta, settings, credentials vacía) |
+| Fallback `BlobVaultDb` | ✅ disponible en trait; no es el default |
+| Permisos 0o700/0o600 | ✅ Unix |
+| Migración scaffolding + backup preventivo | ✅ hooks |
+
+Spike histórico: `docs/SQLCIPHER_SPIKE.md` (superado: SQLCipher enlazado).

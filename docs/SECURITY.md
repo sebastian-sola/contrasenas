@@ -1,6 +1,6 @@
 # Seguridad — Contraseñas
 
-**Fase 2 · Crypto de producción implementada en `vault-core` (sin persistencia de bóveda)**
+**Fase 3 · Crypto + bóveda en disco (SQLCipher); sin CRUD de credenciales**
 
 Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas (§35).
 
@@ -19,7 +19,9 @@ Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas
 | Cabecera versionada `CryptoHeaderV1` | ✅ serializable JSON; `format_version = 1` |
 | Sesión derive → use → wipe | ✅ `VaultSession` + `zeroize` en DEK/KEK |
 | Kit emergencia (capa crypto) | ✅ generar código, unlock recovery, rewrap master |
-| Persistencia bóveda / SQLCipher | ❌ Fase 3 |
+| Persistencia bóveda / SQLCipher | ✅ Fase 3 (`Vault`, `vault.header`, `vault.dat`) |
+| Backoff + auto-lock 5 min | ✅ Fase 3 |
+| Kit emergencia persistido (wrap en cabecera) | ✅ Fase 3 (código solo al crear) |
 | CRUD credenciales | ❌ Fase 4 |
 
 Errores (`CryptoError`, `SessionError`, `RecoveryError`): mensajes genéricos; **nunca** incluyen passwords, claves ni ciphertext interpretado como secreto en logs de error.
