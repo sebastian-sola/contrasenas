@@ -1,0 +1,118 @@
+# Builds unsigned Windows installers (NSIS .exe + MSI) on windows-latest.
+# Artifacts are for evaluation only — expect SmartScreen warnings until code-signed.
+name: Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - "cursor/windows-installer*"
+    tags:
+      - "v*"
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/windows-installer.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Build NSIS + MSI (unsigned)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: apps/desktop/pnpm-lock.yaml
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Install frontend dependencies
+        working-directory: apps/desktop
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Windows bundles (NSIS + MSI)
+        working-directory: apps/desktop
+        # Unsigned evaluation build. Do not put signing certificates in the repo.
+        run: pnpm tauri build --bundles nsis,msi
+
+      - name: Collect installers and checksums
+        run: |
+          $ErrorActionPreference = "Stop"
+          $out = "dist-windows"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+          $candidates = @(
+            "target/release/bundle/nsis/*.exe",
+            "target/release/bundle/msi/*.msi",
+            "apps/desktop/src-tauri/target/release/bundle/nsis/*.exe",
+            "apps/desktop/src-tauri/target/release/bundle/msi/*.msi"
+          )
+
+          $found = @()
+          foreach ($pattern in $candidates) {
+            $found += Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue
+          }
+          $found = $found | Sort-Object FullName -Unique
+
+          if (-not $found -or $found.Count -eq 0) {
+            Write-Error "No NSIS/MSI installers found under target/**/bundle/{nsis,msi}"
+          }
+
+          foreach ($file in $found) {
+            $ext = $file.Extension.ToLowerInvariant()
+            if ($ext -eq ".exe") {
+              $destName = "Contrasenas-Setup-0.1.0-windows.exe"
+            } elseif ($ext -eq ".msi") {
+              $destName = "Contrasenas-Setup-0.1.0-windows.msi"
+            } else {
+              continue
+            }
+            $dest = Join-Path $out $destName
+            Copy-Item -Force $file.FullName $dest
+            $hash = (Get-FileHash -Algorithm SHA256 $dest).Hash.ToLowerInvariant()
+            Set-Content -Path "$dest.sha256" -Value "$hash  $destName`n" -NoNewline
+            Write-Host "Prepared $destName ($hash)"
+          }
+
+          Get-ChildItem $out | Format-Table Name, Length
+
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: Contrasenas-Setup-0.1.0-windows
+          path: |
+            dist-windows/Contrasenas-Setup-0.1.0-windows.exe
+            dist-windows/Contrasenas-Setup-0.1.0-windows.exe.sha256
+            dist-windows/Contrasenas-Setup-0.1.0-windows.msi
+            dist-windows/Contrasenas-Setup-0.1.0-windows.msi.sha256
+          if-no-files-found: error
+          retention-days: 14

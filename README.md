@@ -42,17 +42,21 @@ pnpm --dir apps/desktop tauri dev
 Datos locales: por defecto bajo `~/.local/share/contrasenas` (Linux) o `%APPDATA%\Contraseñas` (Windows).  
 Puedes forzar otra ruta con `CONTRASENAS_DATA_DIR=/ruta/segura`.
 
-## Notas de build / instalador (para más adelante)
+## Instalador Windows (evaluación)
 
-Cuando se quiera empaquetar para un PC de usuario:
+Configuración Tauri lista para **NSIS** (`.exe`) y **MSI**, producto **Contraseñas** (`app.contrasenas.desktop`).
 
-```bash
-pnpm --dir apps/desktop tauri build
+- Workflow: [`.github/workflows/windows-installer.yml`](.github/workflows/windows-installer.yml) → artifact `Contrasenas-Setup-0.1.0-windows`.
+- Guía: [`docs/build-windows-installer.md`](docs/build-windows-installer.md).
+- En un PC Windows de desarrollo:
+
+```powershell
+pnpm --dir apps/desktop tauri build --bundles nsis,msi
 ```
 
-- Genera artefactos según el SO (AppImage/deb, MSI, dmg…).
-- **Firma de código / notarización:** ver §5 de `docs/SECURITY_REVIEW.md`. Los certificados **no** van en el repo.
-- Hasta que haya builds firmados, trata cualquier instalador como “solo para pruebas en máquina de confianza”.
+- **Firma de código:** aún no (SmartScreen avisará). Ver §5 de `docs/SECURITY_REVIEW.md`. Certificados **fuera** del repo.
+- Un agente Linux **no** produce el `.exe` final; hace falta el workflow en `windows-latest` o un PC Windows.
+- **Nada de esto implica** que Contraseñas esté instalada en el PC personal de Sebastián.
 
 ## Estructura del proyecto
 
