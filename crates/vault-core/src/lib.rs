@@ -1,6 +1,6 @@
 //! Núcleo de la bóveda Contraseñas.
 //!
-//! Fase 8: … + auditoría + clipboard/settings/backups.
+//! Fase 9: UI de escritorio pulida + panel de inicio.
 
 #![forbid(unsafe_code)]
 
@@ -52,15 +52,15 @@ pub use vault_header::{VaultFileHeader, VAULT_SCHEMA_VERSION};
 pub const APP_SCHEMA_VERSION: u16 = 4;
 
 /// Fase de desarrollo implementada en este crate.
-pub const IMPLEMENTED_PHASE: u8 = 8;
+pub const IMPLEMENTED_PHASE: u8 = 9;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn phase_is_eight() {
-        assert_eq!(IMPLEMENTED_PHASE, 8);
+    fn phase_is_nine() {
+        assert_eq!(IMPLEMENTED_PHASE, 9);
     }
 
     #[test]

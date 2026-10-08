@@ -59,6 +59,10 @@ pub struct CredentialSummary {
     pub reuse_count: u32,
     pub policy_id: Option<String>,
     pub policy_compliant: Option<bool>,
+    /// Unix epoch seconds (string) para avisos del panel de inicio.
+    pub updated_at: String,
+    /// Puntuación de fortaleza opcional (0–4); None si no calculada.
+    pub strength_score: Option<i32>,
 }
 
 /// Datos de creación/edición desde la UI.
@@ -232,6 +236,8 @@ impl crate::vault::Vault {
                 reuse_count: if reuse > 1 { reuse } else { 0 },
                 policy_id: row.policy_id,
                 policy_compliant: row.policy_compliant.map(|v| v != 0),
+                updated_at: row.updated_at,
+                strength_score: row.strength_score,
             });
         }
         Ok(out)
@@ -299,7 +305,7 @@ impl crate::vault::Vault {
             next_renewal_at: next_renewal,
             expiry_policy: input.expiry_policy.clone(),
             status: Some(status),
-            strength_score: None,
+            strength_score: Some(rough_strength_score(&input.password)),
             policy_compliant: compliant.map(i32::from),
             password_fp: Some(fp),
             deleted_at: None,
@@ -395,7 +401,11 @@ impl crate::vault::Vault {
             next_renewal_at: next_renewal,
             expiry_policy: input.expiry_policy,
             status: Some(status),
-            strength_score: existing.strength_score,
+            strength_score: Some(if pw_changed {
+                rough_strength_score(&input.password)
+            } else {
+                existing.strength_score.unwrap_or_else(|| rough_strength_score(&input.password))
+            }),
             policy_compliant: compliant.map(i32::from),
             password_fp: Some(fp),
             deleted_at: None,
@@ -567,6 +577,36 @@ fn row_to_credential(
         deleted,
         reuse_count: if reuse_total > 1 { reuse_total } else { 0 },
         expiry_color: color,
+    }
+}
+
+/// Puntuación 0–4 a partir de longitud y diversidad aproximada del charset.
+fn rough_strength_score(password: &str) -> i32 {
+    let mut charset = 0u32;
+    if password.chars().any(|c| c.is_ascii_lowercase()) {
+        charset += 26;
+    }
+    if password.chars().any(|c| c.is_ascii_uppercase()) {
+        charset += 26;
+    }
+    if password.chars().any(|c| c.is_ascii_digit()) {
+        charset += 10;
+    }
+    if password.chars().any(|c| !c.is_ascii_alphanumeric()) {
+        charset += 33;
+    }
+    let len = password.chars().count() as u32;
+    let (bits, _) = crate::generator::estimate_strength(len, charset.max(2));
+    if bits < 28.0 {
+        0
+    } else if bits < 36.0 {
+        1
+    } else if bits < 60.0 {
+        2
+    } else if bits < 128.0 {
+        3
+    } else {
+        4
     }
 }
 

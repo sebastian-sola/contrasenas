@@ -1,5 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "@fontsource-variable/fraunces";
+import "@fontsource-variable/dm-sans";
 import App from "./App";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

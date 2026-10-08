@@ -26,6 +26,8 @@ type CredentialSummary = {
   reuseCount: number;
   policyId: string | null;
   policyCompliant: boolean | null;
+  updatedAt: string;
+  strengthScore: number | null;
 };
 
 type Credential = {
@@ -194,6 +196,76 @@ function violationLabel(code: string): string {
   return map[code] ?? code;
 }
 
+type AppTab =
+  | "home"
+  | "creds"
+  | "policies"
+  | "generator"
+  | "audit"
+  | "settings";
+
+function dashboardStats(items: CredentialSummary[]) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const weekAgo = nowSec - 7 * 86400;
+  let expiringSoon = 0;
+  let expired = 0;
+  let weak = 0;
+  let reused = 0;
+  let recentlyModified = 0;
+  for (const item of items) {
+    if (item.expiryColor === "yellow" || item.expiryColor === "orange") {
+      expiringSoon += 1;
+    }
+    if (item.expiryColor === "red") {
+      expired += 1;
+    }
+    const weakScore =
+      item.strengthScore !== null && item.strengthScore !== undefined
+        ? item.strengthScore <= 1
+        : false;
+    if (weakScore || item.policyCompliant === false) {
+      weak += 1;
+    }
+    if (item.reuseCount > 0) {
+      reused += 1;
+    }
+    const updated = Number(item.updatedAt);
+    if (!Number.isNaN(updated) && updated >= weekAgo) {
+      recentlyModified += 1;
+    } else if (item.updatedAt.includes("T")) {
+      const ms = Date.parse(item.updatedAt);
+      if (!Number.isNaN(ms) && ms / 1000 >= weekAgo) {
+        recentlyModified += 1;
+      }
+    }
+  }
+  return {
+    total: items.length,
+    expiringSoon,
+    expired,
+    weak,
+    reused,
+    recentlyModified,
+  };
+}
+
+function tabTitle(tab: AppTab): string {
+  switch (tab) {
+    case "home":
+      return "Inicio";
+    case "creds":
+      return "Tus contraseñas";
+    case "policies":
+      return "Reglas";
+    case "generator":
+      return "Generador";
+    case "audit":
+      return "Actividad";
+    case "settings":
+      return "Ajustes";
+  }
+}
+
 function App() {
   const [info, setInfo] = useState<PhaseInfo | null>(null);
   const [password, setPassword] = useState("");
@@ -201,9 +273,8 @@ function App() {
   const [recoveryOnce, setRecoveryOnce] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [tab, setTab] = useState<
-    "creds" | "policies" | "generator" | "audit" | "settings"
-  >("creds");
+  const [tab, setTab] = useState<AppTab>("home");
+  const [listLoading, setListLoading] = useState(false);
   const [appSettings, setAppSettings] = useState({
     autoLockSecs: 300,
     clipboardClearSecs: 30,
@@ -289,12 +360,12 @@ function App() {
         "Modo vista previa web: la bóveda real solo funciona en la app de escritorio.",
       );
       setInfo({
-        phase: 5,
-        schemaVersion: 3,
+        phase: 9,
+        schemaVersion: 4,
         sessionState: "locked",
         storageBackend: "sqlcipher_aead",
         recoverySummary:
-          "Kit de emergencia: código aparte; la contraseña maestra nunca se guarda.",
+          "Código de emergencia aparte; la contraseña maestra nunca se guarda.",
         backupFormatVersion: 1,
         dataDirHint: "(data-dir-del-SO)",
         productionCrypto: true,
@@ -306,6 +377,7 @@ function App() {
   }
 
   async function loadList(q?: string) {
+    setListLoading(true);
     try {
       const list = await invoke<CredentialSummary[]>("credentials_list", {
         query: q && q.trim() ? q.trim() : null,
@@ -313,6 +385,8 @@ function App() {
       setItems(list);
     } catch (err) {
       setMessage(String(err));
+    } finally {
+      setListLoading(false);
     }
   }
 
@@ -378,7 +452,7 @@ function App() {
     setMessage(null);
     try {
       await invoke("try_unlock", { masterPassword: password });
-      setMessage("Bóveda desbloqueada.");
+      setMessage("Lista abierta. Tus datos están seguros en este equipo.");
       setPassword("");
       await refresh();
       await loadList("");
@@ -390,6 +464,7 @@ function App() {
       }
       await loadSettings();
       await loadBackups();
+      setTab("home");
       setMode("list");
       setSelectedId(null);
       setDetail(null);
@@ -437,7 +512,7 @@ function App() {
         }, secs * 1000);
       } else {
         setClipboardToast(
-          "Copiado. Auto-borrado desactivado (Configuración).",
+          "Copiado. Auto-borrado desactivado (Ajustes).",
         );
         window.setTimeout(() => setClipboardToast(null), 3000);
       }
@@ -454,7 +529,7 @@ function App() {
         settings: appSettings,
       });
       setAppSettings(s);
-      setMessage("Configuración guardada.");
+      setMessage("Ajustes guardados.");
     } catch (err) {
       setMessage(String(err));
     } finally {
@@ -573,7 +648,7 @@ function App() {
   async function onLock() {
     try {
       await invoke("lock_session");
-      setMessage("Bóveda bloqueada. Claves borradas de memoria.");
+      setMessage("Bloqueado. Los datos quedan ocultos otra vez.");
       setItems([]);
       setPolicies([]);
       setDetail(null);
@@ -900,39 +975,39 @@ function App() {
   }
 
   if (info?.sessionState === "unlocked") {
+    const stats = dashboardStats(items);
     return (
       <main className="vault-app">
         <header className="vault-top">
           <div>
             <p className="brand">Contraseñas</p>
-            <h1>
-              {tab === "creds"
-                ? "Tus credenciales"
-                : tab === "policies"
-                  ? "Políticas"
-                  : tab === "generator"
-                    ? "Generador"
-                    : tab === "audit"
-                      ? "Auditoría"
-                      : "Configuración"}
-            </h1>
+            <h1>{tabTitle(tab)}</h1>
             <p className="lede">
-              Fase {info.phase}: portapapeles, bloqueo automático y backups
-              cifrados.
+              {tab === "home"
+                ? "Un vistazo rápido a cómo van tus contraseñas."
+                : tab === "creds"
+                  ? "Busca, abre o añade servicios. La contraseña va oculta hasta que la muestres."
+                  : tab === "policies"
+                    ? "Reglas para exigir contraseñas más seguras."
+                    : tab === "generator"
+                      ? "Crea una contraseña fuerte. No se guarda hasta que tú lo digas."
+                      : tab === "audit"
+                        ? "Qué ha pasado en la app (sin mostrar secretos)."
+                        : "Bloqueo, portapapeles y copias de seguridad."}
             </p>
           </div>
           <div className="vault-actions">
             <button type="button" className="secondary" onClick={onLock}>
               Bloquear
             </button>
-            {tab === "creds" && (
+            {(tab === "creds" || tab === "home") && (
               <button type="button" onClick={openCreate}>
                 Nueva
               </button>
             )}
             {tab === "policies" && (
               <button type="button" onClick={openPolicyCreate}>
-                Nueva política
+                Nueva regla
               </button>
             )}
           </div>
@@ -941,10 +1016,20 @@ function App() {
         <nav className="tabs" aria-label="Secciones">
           <button
             type="button"
+            className={tab === "home" ? "tab active" : "tab"}
+            onClick={() => {
+              setTab("home");
+              void loadList("");
+            }}
+          >
+            Inicio
+          </button>
+          <button
+            type="button"
             className={tab === "creds" ? "tab active" : "tab"}
             onClick={() => setTab("creds")}
           >
-            Credenciales
+            Contraseñas
           </button>
           <button
             type="button"
@@ -954,7 +1039,7 @@ function App() {
               void loadPolicies();
             }}
           >
-            Políticas
+            Reglas
           </button>
           <button
             type="button"
@@ -974,7 +1059,7 @@ function App() {
               void loadAudit();
             }}
           >
-            Auditoría
+            Actividad
           </button>
           <button
             type="button"
@@ -985,7 +1070,7 @@ function App() {
               void loadBackups();
             }}
           >
-            Configuración
+            Ajustes
           </button>
         </nav>
 
@@ -999,6 +1084,100 @@ function App() {
           <p className="toast banner" role="status">
             {message}
           </p>
+        )}
+
+        {tab === "home" && (
+          <section className="panel" aria-label="Resumen">
+            {listLoading ? (
+              <div className="empty-state" aria-busy="true">
+                <div className="skeleton" style={{ width: "40%" }} />
+                <div
+                  className="skeleton"
+                  style={{ width: "70%", marginTop: "0.75rem" }}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="dash-grid">
+                  <div className="dash-stat ok">
+                    <button
+                      type="button"
+                      className="linkish"
+                      onClick={() => setTab("creds")}
+                    >
+                      <span className="label">Total guardadas</span>
+                      <span className="value">{stats.total}</span>
+                    </button>
+                  </div>
+                  <div className="dash-stat warn">
+                    <button
+                      type="button"
+                      className="linkish"
+                      onClick={() => setTab("creds")}
+                    >
+                      <span className="label">Caducan pronto</span>
+                      <span className="value">{stats.expiringSoon}</span>
+                    </button>
+                  </div>
+                  <div className="dash-stat danger">
+                    <button
+                      type="button"
+                      className="linkish"
+                      onClick={() => setTab("creds")}
+                    >
+                      <span className="label">Ya caducadas</span>
+                      <span className="value">{stats.expired}</span>
+                    </button>
+                  </div>
+                  <div className="dash-stat warn">
+                    <span className="label">Débiles o sin regla</span>
+                    <span className="value">{stats.weak}</span>
+                  </div>
+                  <div className="dash-stat warn">
+                    <span className="label">Reutilizadas</span>
+                    <span className="value">{stats.reused}</span>
+                  </div>
+                  <div className="dash-stat">
+                    <span className="label">Cambiadas (7 días)</span>
+                    <span className="value">{stats.recentlyModified}</span>
+                  </div>
+                </div>
+                <div className="dash-actions">
+                  <button type="button" onClick={openCreate}>
+                    Añadir contraseña
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      setTab("generator");
+                      void loadPolicies();
+                    }}
+                  >
+                    Generar una nueva
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setTab("creds")}
+                  >
+                    Ver todas
+                  </button>
+                </div>
+                {stats.total === 0 ? (
+                  <p className="dash-note">
+                    Aún no hay nada guardado. Empieza con «Añadir contraseña»
+                    o genera una segura.
+                  </p>
+                ) : (
+                  <p className="dash-note">
+                    Los colores de caducidad: verde bien, amarillo/naranja
+                    pronto, rojo ya vencida. Nada sale de este equipo.
+                  </p>
+                )}
+              </>
+            )}
+          </section>
         )}
 
         {tab === "creds" && (
@@ -1019,10 +1198,16 @@ function App() {
                 </button>
               </form>
 
-              {items.length === 0 ? (
-                <p className="empty">
-                  No hay credenciales todavía. Pulsa <strong>Nueva</strong>.
-                </p>
+              {listLoading ? (
+                <div className="empty-state" aria-busy="true">
+                  <strong>Cargando…</strong>
+                  <div className="skeleton" style={{ width: "80%" }} />
+                </div>
+              ) : items.length === 0 ? (
+                <div className="empty-state">
+                  <strong>Sin contraseñas aún</strong>
+                  <p>Pulsa «Nueva» para guardar el primer servicio.</p>
+                </div>
               ) : (
                 <ul className="cred-list">
                   {items.map((item) => (
@@ -1062,7 +1247,7 @@ function App() {
             <section className="panel detail-panel" aria-label="Detalle">
               {(mode === "create" || mode === "edit") && (
                 <form className="cred-form" onSubmit={onSaveCredential}>
-                  <h2>{mode === "create" ? "Nueva credencial" : "Editar"}</h2>
+                  <h2>{mode === "create" ? "Nueva contraseña" : "Editar"}</h2>
                   <label htmlFor="svc">Servicio *</label>
                   <input
                     id="svc"
@@ -1211,9 +1396,10 @@ function App() {
               )}
 
               {mode === "list" && !detail && (
-                <p className="empty">
-                  Elige una credencial de la lista o crea una nueva.
-                </p>
+                <div className="empty-state">
+                  <strong>Elige un servicio</strong>
+                  <p>Abre uno de la lista o pulsa «Nueva» para añadirlo.</p>
+                </div>
               )}
 
               {mode === "list" && detail && (
@@ -1224,11 +1410,11 @@ function App() {
                       {detail.status} · {expiryLabel(detail.expiryColor)}
                     </span>
                     {detail.policyCompliant === true && (
-                      <span className="badge compliant">Cumple política</span>
+                      <span className="badge compliant">Cumple la regla</span>
                     )}
                     {detail.policyCompliant === false && (
                       <span className="badge noncompliant">
-                        No cumple política
+                        No cumple la regla
                       </span>
                     )}
                   </div>
@@ -1270,7 +1456,7 @@ function App() {
                       </dd>
                     </div>
                     <div>
-                      <dt>Política</dt>
+                      <dt>Regla</dt>
                       <dd>{policyName(detail.policyId)}</dd>
                     </div>
                     <div>
@@ -1979,9 +2165,9 @@ function App() {
         {tab === "settings" && (
           <div className="vault-grid">
             <section className="panel" aria-label="Ajustes">
-              <h2>Seguridad</h2>
+              <h2>Bloqueo y portapapeles</h2>
               <form className="cred-form" onSubmit={saveSettings}>
-                <label htmlFor="alock">Auto-bloqueo (segundos)</label>
+                <label htmlFor="alock">Bloquear sola tras</label>
                 <select
                   id="alock"
                   value={appSettings.autoLockSecs}
@@ -2030,7 +2216,7 @@ function App() {
             </section>
 
             <section className="panel" aria-label="Backups">
-              <h2>Backups cifrados (.cpbak)</h2>
+              <h2>Copias de seguridad</h2>
               <label htmlFor="bmaster">Contraseña maestra (para cifrar)</label>
               <input
                 id="bmaster"
@@ -2060,12 +2246,15 @@ function App() {
                 </button>
               </div>
               <p className="hint">
-                Exportar en claro está bloqueado. Importar de otros gestores
-                requiere confirmación explícita (aún stub).
+                No se puede exportar en texto legible. Traer datos de otras apps
+                pedirá confirmación (aún no disponible).
               </p>
-              <h3>Copias locales</h3>
+              <h3>Archivos guardados</h3>
               {backupList.length === 0 ? (
-                <p className="empty">Aún no hay backups en la carpeta local.</p>
+                <div className="empty-state">
+                  <strong>Sin copias aún</strong>
+                  <p>Crea una copia cifrada para poder recuperarla después.</p>
+                </div>
               ) : (
                 <ul className="audit-list">
                   {backupList.map((b) => (
@@ -2113,84 +2302,95 @@ function App() {
     );
   }
 
+  if (!info) {
+    return (
+      <main className="lock-screen">
+        <div className="lock-hero">
+          <p className="lock-brand">Contraseñas</p>
+          <div className="lock-loading">
+            <div className="spinner" aria-hidden />
+            <p>Preparando la app…</p>
+          </div>
+          {loadError && (
+            <p className="hint toast banner error" role="alert">
+              {loadError}
+            </p>
+          )}
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="lock-screen">
-      <div className="lock-card">
-        <p className="brand">Contraseñas</p>
-        <h1>
-          {info?.sessionState === "unlocked"
-            ? "Bóveda abierta"
-            : "Bóveda bloqueada"}
-        </h1>
-        <p className="lede">
-          Fase <strong>8</strong>: portapapeles con auto-borrado, backups
-          cifrados y configuración.
+      <div className="lock-hero">
+        <p className="lock-brand">Contraseñas</p>
+        <p className="lock-tagline">
+          Tus claves, solo en este equipo. Sin nube y sin sorpresas.
         </p>
 
-        {info && !info.vaultExists && info.sessionState === "locked" && (
-          <form className="lock-form" onSubmit={onCreateVault}>
-            <label htmlFor="master-create">
-              Crear bóveda — contraseña maestra
-            </label>
-            <input
-              id="master-create"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.currentTarget.value)}
-              placeholder="Elige una contraseña fuerte"
-            />
-            <button type="submit">Crear bóveda</button>
-          </form>
-        )}
+        <div className="lock-panel">
+          {!info.vaultExists && info.sessionState === "locked" && (
+            <>
+              <h1>Empezar</h1>
+              <p className="lede">
+                Elige una contraseña maestra fuerte. Con ella abrirás la lista;
+                no se guarda en claro en el disco.
+              </p>
+              <form className="lock-form" onSubmit={onCreateVault}>
+                <label htmlFor="master-create">Contraseña maestra</label>
+                <input
+                  id="master-create"
+                  type="password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.currentTarget.value)}
+                  placeholder="Elige una contraseña fuerte"
+                />
+                <button type="submit">Crear mi espacio</button>
+              </form>
+            </>
+          )}
 
-        {info?.vaultExists && info.sessionState === "locked" && (
-          <form className="lock-form" onSubmit={onUnlock}>
-            <label htmlFor="master">Contraseña maestra</label>
-            <input
-              id="master"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.currentTarget.value)}
-              placeholder="Desbloquear"
-            />
-            <button type="submit">Desbloquear</button>
-          </form>
-        )}
+          {info.vaultExists && info.sessionState === "locked" && (
+            <>
+              <h1>Bloqueado</h1>
+              <p className="lede">
+                Introduce tu contraseña maestra para ver tus servicios. Hasta
+                entonces no se muestra ningún dato.
+              </p>
+              <form className="lock-form" onSubmit={onUnlock}>
+                <label htmlFor="master">Contraseña maestra</label>
+                <input
+                  id="master"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.currentTarget.value)}
+                  placeholder="Escribe tu contraseña"
+                />
+                <button type="submit">Abrir</button>
+              </form>
+            </>
+          )}
 
-        {recoveryOnce && (
-          <p className="toast" role="status">
-            Código de emergencia (cópialo ahora): <code>{recoveryOnce}</code>
-          </p>
-        )}
-        {message && (
-          <p className="toast" role="status">
-            {message}
-          </p>
-        )}
-        {loadError && <p className="hint">{loadError}</p>}
-
-        {info && (
-          <dl className="meta">
-            <div>
-              <dt>Fase</dt>
-              <dd>{info.phase}</dd>
-            </div>
-            <div>
-              <dt>Sesión</dt>
-              <dd>{info.sessionState}</dd>
-            </div>
-            <div>
-              <dt>Almacén</dt>
-              <dd>{info.storageBackend}</dd>
-            </div>
-            <div>
-              <dt>Bóveda en disco</dt>
-              <dd>{info.vaultExists ? "sí" : "no"}</dd>
-            </div>
-          </dl>
-        )}
+          {recoveryOnce && (
+            <p className="toast banner" role="status">
+              Código de emergencia (guárdalo en papel ahora):{" "}
+              <code>{recoveryOnce}</code>
+            </p>
+          )}
+          {message && (
+            <p className="toast banner" role="status">
+              {message}
+            </p>
+          )}
+          {loadError && (
+            <p className="hint" role="status">
+              {loadError}
+            </p>
+          )}
+        </div>
       </div>
     </main>
   );
