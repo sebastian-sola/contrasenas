@@ -1,6 +1,6 @@
 # Plan de desarrollo por fases — Contraseñas
 
-**Estado:** Fase 6 ✅ completada · **Fase 7 pendiente de aprobación**
+**Estado:** Fase 7 ✅ completada · **Fase 8 pendiente de aprobación**
 
 Alineado con requisito §36. Prioridad: seguridad de secretos. Entre fases: checklist §37 + revisión de amenazas §39.
 
@@ -89,17 +89,21 @@ Argon2id + AES-256-GCM + DEK wrap + kit crypto en memoria. Tests verdes.
 
 **Gate:** ✅ tests CSPRNG / charset / política / fortaleza / debug redacted / no autosave.  
 **Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup`  
-**Siguiente:** Fase 7 (historial/auditoría UI) **solo tras aprobación explícita**.
+**Siguiente:** Fase 7 hecha.
 
 ---
 
-## FASE 7 — Historial y auditoría
+## FASE 7 — Historial y auditoría ✅ (esta entrega)
 
-- Historial metadatos default; opt-in secrets solo si aprobado.
-- Auditoría cifrada + UI; opción A o B según decisión.
-- Eventos §7.
+- Historial de credencial: metadatos (cuándo, actor, acción, campos, motivo); **sin** plaintext de passwords antiguas.
+- Auditoría SQLCipher v4 (`audit_events`): sequence + eventos §7 existentes; contexto allowlist; `prev_hash` columna lista (MVP = opción A).
+- Unlock failure en cola pending → flush al desbloquear (sin material).
+- UI pestaña Auditoría (filtros tipo/resultado/usuario/objeto) + historial en detalle.
+- Capturas: `media/fase7-auditoria.png`, `media/fase7-historial.png`.
 
-**Gate:** tests “no secretos en audit/history default”.
+**Gate:** ✅ tests emiten eventos; secretos no aparecen; filtros.  
+**Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup`  
+**Siguiente:** Fase 8 (seguridad sistema / clipboard) **solo tras aprobación explícita**.
 
 ---
 

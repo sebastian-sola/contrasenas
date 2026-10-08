@@ -7,7 +7,7 @@
 //! Para FASE 3 el backend activo por defecto es SQLCipher; este fallback permanece
 //! disponible y se prueba de forma aislada.
 
-use super::rows::{CredentialRow, HistoryRow, PolicyRow};
+use super::rows::{AuditRow, CredentialRow, HistoryRow, PolicyRow};
 use super::{StorageBackendKind, StorageError, VaultDb};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -209,6 +209,24 @@ impl VaultDb for BlobVaultDb {
         _credential_id: &str,
         _limit: u32,
     ) -> Result<Vec<String>, StorageError> {
+        Err(StorageError::Database)
+    }
+
+    fn next_audit_sequence(&self) -> Result<i64, StorageError> {
+        Err(StorageError::Database)
+    }
+    fn insert_audit(&mut self, _row: &AuditRow) -> Result<(), StorageError> {
+        Err(StorageError::Database)
+    }
+    fn list_audit(
+        &self,
+        _event_type: Option<&str>,
+        _object_id: Option<&str>,
+        _result: Option<&str>,
+        _since_ts: Option<&str>,
+        _until_ts: Option<&str>,
+        _limit: u32,
+    ) -> Result<Vec<AuditRow>, StorageError> {
         Err(StorageError::Database)
     }
 }

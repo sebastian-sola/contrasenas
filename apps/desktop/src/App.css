@@ -585,6 +585,45 @@ input[type="range"] {
   accent-color: var(--accent);
 }
 
+.audit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-height: 28rem;
+  overflow: auto;
+}
+
+.audit-row {
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--stroke);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.audit-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.audit-meta {
+  margin-top: 0.25rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.audit-ctx {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+
 @media (max-width: 800px) {
   .vault-grid {
     grid-template-columns: 1fr;

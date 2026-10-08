@@ -1,7 +1,7 @@
 # Índice Fase 0 — Arquitectura y seguridad
 
-**Estado:** Fases 0–6 ✅ · **Fase 7 (historial/auditoría) pendiente de aprobación**  
-**Regla:** no iniciar Fase 7 sin aprobación explícita
+**Estado:** Fases 0–7 ✅ · **Fase 8 (seguridad sistema) pendiente de aprobación**  
+**Regla:** no iniciar Fase 8 sin aprobación explícita
 
 Los documentos canónicos detallados están en este Agent Store. El repo Git lleva el mismo conjunto bajo `docs/` para la PR.
 
@@ -44,6 +44,6 @@ Los documentos canónicos detallados están en este Agent Store. El repo Git lle
 
 ## Gate actual
 
-**Fase 6 hecha** (generador CSPRNG + fortaleza). **No iniciar Fase 7** sin aprobación de Sebastián.
+**Fase 7 hecha** (historial metadatos + auditoría cifrada). **No iniciar Fase 8** sin aprobación de Sebastián.
 
-Pendientes: D5 plataforma, D6 auditoría, D7 historial secrets, D8 keystore, D9 passphrase backup.
+Pendientes: D5 plataforma, D7 historial secrets opt-in, D8 keystore, D9 passphrase backup.

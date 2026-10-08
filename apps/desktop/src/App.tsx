@@ -201,7 +201,27 @@ function App() {
   const [recoveryOnce, setRecoveryOnce] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [tab, setTab] = useState<"creds" | "policies" | "generator">("creds");
+  const [tab, setTab] = useState<
+    "creds" | "policies" | "generator" | "audit"
+  >("creds");
+  const [auditEvents, setAuditEvents] = useState<
+    {
+      id: string;
+      sequence: number;
+      timestamp: string;
+      eventType: string;
+      localUserId: string;
+      objectId: string | null;
+      result: string;
+      context: Record<string, unknown>;
+    }[]
+  >([]);
+  const [auditFilter, setAuditFilter] = useState({
+    eventType: "",
+    objectId: "",
+    result: "",
+    localUserId: "",
+  });
   const [genOpts, setGenOpts] = useState({
     length: 20,
     uppercase: true,
@@ -347,6 +367,11 @@ function App() {
       await refresh();
       await loadList("");
       await loadPolicies();
+      try {
+        await invoke("audit_app_start");
+      } catch {
+        /* ignore if already recorded */
+      }
       setMode("list");
       setSelectedId(null);
       setDetail(null);
@@ -354,6 +379,25 @@ function App() {
       setMessage(String(err));
       setPassword("");
       await refresh();
+    }
+  }
+
+  async function loadAudit() {
+    try {
+      const list = await invoke<typeof auditEvents>("audit_list", {
+        filter: {
+          eventType: opt(auditFilter.eventType),
+          objectId: opt(auditFilter.objectId),
+          result: opt(auditFilter.result),
+          localUserId: opt(auditFilter.localUserId),
+          sinceTs: null,
+          untilTs: null,
+          limit: 200,
+        },
+      });
+      setAuditEvents(list);
+    } catch (err) {
+      setMessage(String(err));
     }
   }
 
@@ -697,11 +741,13 @@ function App() {
                 ? "Tus credenciales"
                 : tab === "policies"
                   ? "Políticas"
-                  : "Generador"}
+                  : tab === "generator"
+                    ? "Generador"
+                    : "Auditoría"}
             </h1>
             <p className="lede">
-              Fase {info.phase}: generador seguro (CSPRNG). No se guarda sola —
-              tú decides si usarla en una credencial.
+              Fase {info.phase}: historial de cambios y registro de acciones
+              (sin contraseñas ni secretos).
             </p>
           </div>
           <div className="vault-actions">
@@ -748,6 +794,16 @@ function App() {
             }}
           >
             Generador
+          </button>
+          <button
+            type="button"
+            className={tab === "audit" ? "tab active" : "tab"}
+            onClick={() => {
+              setTab("audit");
+              void loadAudit();
+            }}
+          >
+            Auditoría
           </button>
         </nav>
 
@@ -1002,7 +1058,15 @@ function App() {
                         <button
                           type="button"
                           className="secondary"
-                          onClick={() => setShowPassword((v) => !v)}
+                          onClick={() => {
+                            const next = !showPassword;
+                            setShowPassword(next);
+                            if (next && detail) {
+                              void invoke("audit_password_view", {
+                                credentialId: detail.id,
+                              }).catch(() => undefined);
+                            }
+                          }}
                         >
                           {showPassword ? "Ocultar" : "Mostrar"}
                         </button>
@@ -1596,6 +1660,120 @@ function App() {
             </section>
           </div>
         )}
+
+        {tab === "audit" && (
+          <div className="vault-grid">
+            <section className="panel" aria-label="Filtros auditoría">
+              <h2>Filtros</h2>
+              <label htmlFor="aftype">Tipo de evento</label>
+              <select
+                id="aftype"
+                value={auditFilter.eventType}
+                onChange={(e) =>
+                  setAuditFilter({
+                    ...auditFilter,
+                    eventType: e.currentTarget.value,
+                  })
+                }
+              >
+                <option value="">Todos</option>
+                <option value="app_start">app_start</option>
+                <option value="unlock_success">unlock_success</option>
+                <option value="unlock_failure">unlock_failure</option>
+                <option value="session_lock">session_lock</option>
+                <option value="auto_lock">auto_lock</option>
+                <option value="credential_create">credential_create</option>
+                <option value="credential_update">credential_update</option>
+                <option value="credential_delete">credential_delete</option>
+                <option value="credential_restore">credential_restore</option>
+                <option value="password_change">password_change</option>
+                <option value="password_view">password_view</option>
+              </select>
+              <label htmlFor="afres">Resultado</label>
+              <select
+                id="afres"
+                value={auditFilter.result}
+                onChange={(e) =>
+                  setAuditFilter({
+                    ...auditFilter,
+                    result: e.currentTarget.value,
+                  })
+                }
+              >
+                <option value="">Todos</option>
+                <option value="success">success</option>
+                <option value="failure">failure</option>
+              </select>
+              <label htmlFor="afobj">ID credencial / objeto</label>
+              <input
+                id="afobj"
+                value={auditFilter.objectId}
+                onChange={(e) =>
+                  setAuditFilter({
+                    ...auditFilter,
+                    objectId: e.currentTarget.value,
+                  })
+                }
+                placeholder="opcional"
+              />
+              <label htmlFor="afuser">Usuario local</label>
+              <input
+                id="afuser"
+                value={auditFilter.localUserId}
+                onChange={(e) =>
+                  setAuditFilter({
+                    ...auditFilter,
+                    localUserId: e.currentTarget.value,
+                  })
+                }
+                placeholder="local"
+              />
+              <div className="form-actions">
+                <button type="button" onClick={() => void loadAudit()}>
+                  Buscar
+                </button>
+              </div>
+              <p className="hint">
+                Nunca se registran contraseñas, claves ni notas privadas.
+              </p>
+            </section>
+
+            <section className="panel" aria-label="Eventos">
+              <h2>Eventos ({auditEvents.length})</h2>
+              {auditEvents.length === 0 ? (
+                <p className="empty">No hay eventos con estos filtros.</p>
+              ) : (
+                <ul className="audit-list">
+                  {auditEvents.map((ev) => (
+                    <li key={ev.id} className="audit-row">
+                      <div className="audit-head">
+                        <strong>{ev.eventType}</strong>
+                        <span
+                          className={
+                            ev.result === "success"
+                              ? "badge compliant"
+                              : "badge noncompliant"
+                          }
+                        >
+                          {ev.result}
+                        </span>
+                      </div>
+                      <div className="audit-meta">
+                        #{ev.sequence} · {ev.timestamp} · {ev.localUserId}
+                        {ev.objectId ? ` · obj ${ev.objectId.slice(0, 8)}…` : ""}
+                      </div>
+                      {Object.keys(ev.context || {}).length > 0 && (
+                        <code className="audit-ctx">
+                          {JSON.stringify(ev.context)}
+                        </code>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        )}
       </main>
     );
   }
@@ -1610,8 +1788,8 @@ function App() {
             : "Bóveda bloqueada"}
         </h1>
         <p className="lede">
-          Fase <strong>6</strong>: generador seguro de contraseñas (CSPRNG) y
-          estimación de fortaleza.
+          Fase <strong>7</strong>: historial de cambios y auditoría cifrada
+          (sin secretos).
         </p>
 
         {info && !info.vaultExists && info.sessionState === "locked" && (

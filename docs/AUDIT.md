@@ -1,8 +1,8 @@
 # Auditoría — Contraseñas
 
-**Fase 0 · Diseño · Sin implementación**
+**Fase 7 · Implementado (MVP opción A)**
 
-Requisito §7: sistema de auditoría independiente, cifrado, sin secretos; evaluar anti-manipulación.
+Requisito §7: sistema de auditoría independiente, cifrado, sin secretos; anti-manipulación MVP.
 
 ---
 
@@ -12,59 +12,58 @@ Requisito §7: sistema de auditoría independiente, cifrado, sin secretos; evalu
 - Soporte a accountability local (multi-usuario futuro).
 - **Nunca** registrar: passwords, master, DEK/KEK, tokens, contenido de notas sensibles.
 
-La auditoría vive **dentro** del almacén cifrado (SQLCipher); no es un log de texto plano en disco.
+La auditoría vive **dentro** del almacén cifrado (SQLCipher schema v4, tabla `audit_events`); no es un log de texto plano en disco.
 
 ---
 
 ## 2. Eventos mínimos
 
-| Evento | Notas |
-|--------|-------|
-| `app_start` | Arranque |
-| `unlock_success` / `unlock_failure` | Sin password |
-| `auto_lock` / `session_lock` | |
-| `credential_create` / `update` / `delete` / `restore` | IDs, no secretos |
-| `password_change` | Solo IDs / flags |
-| `password_view` | Consulta de secreto |
-| `clipboard_copy` | Qué campo (user/pass), no valor |
-| `export` / `import` / `backup_create` / `backup_restore` | |
-| `settings_change` | Claves de config, no secretos |
-| `master_password_change` | Sin material criptográfico |
+| Evento | Estado F7 |
+|--------|-----------|
+| `app_start` | ✅ (cola si bloqueada; flush al desbloquear) |
+| `unlock_success` / `unlock_failure` | ✅ (failure en cola pending; sin password) |
+| `auto_lock` / `session_lock` | ✅ |
+| `credential_create` / `update` / `delete` / `restore` | ✅ |
+| `password_change` | ✅ |
+| `password_view` | ✅ (al pulsar Mostrar) |
+| `clipboard_copy` | ⏳ FASE 8 |
+| `export` / `import` / `backup_*` | ⏳ fases posteriores |
+| `settings_change` / `master_password_change` | ⏳ cuando existan |
 
-Cada evento: `id`, `timestamp`, `type`, `local_user_id`, `object_id?`, `result`, `context` (JSON no sensible).
+Cada evento: `id`, `sequence`, `timestamp`, `event_type`, `local_user_id`, `object_id?`, `result`, `context_json` (allowlist), `prev_hash` (columna lista).
 
 ---
 
 ## 3. Cifrado
 
-- En reposo: protegida por SQLCipher (+ misma sesión que el resto).
-- Campos de contexto: allowlist de claves; tests que fallen si hay patrones de secreto.
+- En reposo: SQLCipher (+ misma sesión).
+- Contexto: allowlist (`CONTEXT_ALLOWLIST` en `vault-core`); tests rechazan claves/secretos.
 
 ---
 
-## 4. Anti-manipulación — opciones
+## 4. Anti-manipulación
 
-| Opción | Ventaja | Limitación |
-|--------|---------|------------|
-| **A. Solo AEAD/SQLCipher del almacén** | Simple | Quien tiene master puede reescribir auditoría “válida” |
-| **B. Hash encadenado** (`prev_hash` + hash del evento) | Detecta recortes/reordenados si se conserva la cabeza | El dueño de la DEK puede regenerar la cadena |
-| **C. Firma con clave de auditoría separada** | Mejor separación de roles | Complejidad; gestión de clave; overkill MVP |
+| Opción | Estado |
+|--------|--------|
+| **A. SQLCipher + `sequence` monotónico** | ✅ **MVP activo** |
+| **B. Hash encadenado `prev_hash`** | Schema listo (columna); no verificado aún |
+| **C. Firma clave separada** | No |
 
-### Recomendación
+**Honestidad:** no es prueba forense fuerte frente al poseedor de la master.
 
-- **MVP (Fase 7):** Opción **A** + campo `sequence` monotónico.
-- **Schema listo** para `prev_hash` (Opción B) sin activarlo hasta decisión.
-- Documentar siempre: **no es prueba forense fuerte frente al poseedor de la master**.
+**Decisión D6 (MVP):** opción A; B activable después sin migración destructiva.
 
 ---
 
 ## 5. Consulta en UI
 
-Pantalla Auditoría (§13): filtros por fecha/tipo/usuario; sin revelar secretos; paginación.
+Pestaña **Auditoría**: filtros por tipo, resultado, usuario, objeto; sin revelar secretos.
+
+Historial de credencial: visible en el detalle (metadatos; sin plaintext de passwords antiguas).
 
 ---
 
-## 6. Relación con historial de credenciales
+## 6. Relación historial vs auditoría
 
 | | Historial | Auditoría |
 |--|-----------|-----------|
@@ -74,14 +73,8 @@ Pantalla Auditoría (§13): filtros por fecha/tipo/usuario; sin revelar secretos
 
 ---
 
-## 7. Tests (§26)
+## 7. Tests
 
-- Ningún evento contiene substrings de fixtures de password/master.
-- Fallos de unlock se registran sin material.
-- Cadena B (si se activa): tamper test corta/reordena y detecta.
-
----
-
-## 8. Decisión pendiente
-
-¿Hash encadenado (B) desde el primer release usable, o A en MVP y B después?
+- Operaciones emiten eventos; fixtures de password/master/notas no aparecen en dump.
+- Filtros por tipo/objeto.
+- Allowlist de contexto.

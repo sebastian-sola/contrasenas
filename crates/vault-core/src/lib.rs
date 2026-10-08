@@ -1,6 +1,6 @@
 //! Núcleo de la bóveda Contraseñas.
 //!
-//! Fase 6: criptografía + bóveda + CRUD + políticas + generador CSPRNG.
+//! Fase 7: criptografía + bóveda + CRUD + políticas + generador + auditoría.
 
 #![forbid(unsafe_code)]
 
@@ -16,7 +16,10 @@ pub mod session;
 pub mod vault;
 pub mod vault_header;
 
-pub use audit::AuditSink;
+pub use audit::{
+    AuditError, AuditEvent, AuditEventStub, AuditFilter, AuditSink, NullAuditSink, PendingAudit,
+    CONTEXT_ALLOWLIST,
+};
 pub use credentials::{expiry_color, Credential, CredentialInput, CredentialSummary, HistoryEntry};
 pub use crypto::{
     bootstrap_key_material, bootstrap_key_material_with_params, decrypt, derive_db_key, encrypt,
@@ -39,19 +42,19 @@ pub use session::{SessionError, SessionState, VaultSession};
 pub use vault::{CreateVaultResult, Vault, VaultError};
 pub use vault_header::{VaultFileHeader, VAULT_SCHEMA_VERSION};
 
-/// Versión de esquema lógico de la bóveda en disco (v3 = políticas).
-pub const APP_SCHEMA_VERSION: u16 = 3;
+/// Versión de esquema lógico de la bóveda en disco (v4 = auditoría).
+pub const APP_SCHEMA_VERSION: u16 = 4;
 
 /// Fase de desarrollo implementada en este crate.
-pub const IMPLEMENTED_PHASE: u8 = 6;
+pub const IMPLEMENTED_PHASE: u8 = 7;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn phase_is_six() {
-        assert_eq!(IMPLEMENTED_PHASE, 6);
+    fn phase_is_seven() {
+        assert_eq!(IMPLEMENTED_PHASE, 7);
     }
 
     #[test]

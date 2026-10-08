@@ -1,6 +1,6 @@
 # Seguridad — Contraseñas
 
-**Fase 6 · Crypto + bóveda + CRUD + políticas + generador CSPRNG**
+**Fase 7 · Crypto + bóveda + CRUD + políticas + generador + auditoría**
 
 Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas (§35).
 
@@ -26,6 +26,8 @@ Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas
 | Motor de políticas §8 | ✅ Fase 5 (validación sin loguear plaintext; huellas previas) |
 | Generador CSPRNG §9 | ✅ Fase 6 (`OsRng` / `os_csprng`; no auto-guarda; Debug redacta) |
 | Fortaleza §10 | ✅ Fase 6 (entropía `len×log2(charset)`; etiquetas Muy débil→Muy fuerte) |
+| Auditoría §7 | ✅ Fase 7 (SQLCipher `audit_events`; sin secretos; MVP opción A) |
+| Historial §6 | ✅ Fase 7 UI (metadatos; sin plaintext passwords antiguas) |
 
 Errores (`CryptoError`, `SessionError`, `RecoveryError`): mensajes genéricos; **nunca** incluyen passwords, claves ni ciphertext interpretado como secreto en logs de error.
 

@@ -1,4 +1,4 @@
-//! Almacenamiento de bóveda — Fase 3–5.
+//! Almacenamiento de bóveda — Fase 3–7.
 //!
 //! Backend preferido: **SQLCipher** + AEAD de campos en `vault-core`.
 
@@ -11,8 +11,10 @@ mod sqlcipher;
 
 pub use blob::BlobVaultDb;
 pub use permissions::{ensure_data_dir, set_owner_only_file_permissions};
-pub use rows::{CredentialRow, HistoryRow, PolicyRow};
-pub use sqlcipher::{SqlCipherVaultDb, SCHEMA_VERSION_V1, SCHEMA_VERSION_V2, SCHEMA_VERSION_V3};
+pub use rows::{AuditRow, CredentialRow, HistoryRow, PolicyRow};
+pub use sqlcipher::{
+    SqlCipherVaultDb, SCHEMA_VERSION_V1, SCHEMA_VERSION_V2, SCHEMA_VERSION_V3, SCHEMA_VERSION_V4,
+};
 
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -99,6 +101,19 @@ pub trait VaultDb: Send {
         credential_id: &str,
         limit: u32,
     ) -> Result<Vec<String>, StorageError>;
+
+    // --- Auditoría (Fase 7) ---
+    fn next_audit_sequence(&self) -> Result<i64, StorageError>;
+    fn insert_audit(&mut self, row: &AuditRow) -> Result<(), StorageError>;
+    fn list_audit(
+        &self,
+        event_type: Option<&str>,
+        object_id: Option<&str>,
+        result: Option<&str>,
+        since_ts: Option<&str>,
+        until_ts: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<AuditRow>, StorageError>;
 }
 
 pub fn default_backend() -> StorageBackendKind {

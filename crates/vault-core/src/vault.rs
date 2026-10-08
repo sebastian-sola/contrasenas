@@ -76,6 +76,8 @@ pub struct Vault {
     backend_preference: StorageBackendKind,
     /// Params KDF (tests usan `for_tests`).
     kdf_params: KdfParams,
+    /// Eventos de auditoría pendientes mientras la DB está cerrada.
+    pending_audit: Vec<crate::audit::PendingAudit>,
 }
 
 impl Vault {
@@ -96,7 +98,22 @@ impl Vault {
             last_activity: None,
             backend_preference: backend,
             kdf_params,
+            pending_audit: Vec::new(),
         }
+    }
+
+    pub(crate) fn db_is_open(&self) -> bool {
+        self.db.as_ref().is_some_and(|d| d.is_open())
+    }
+
+    pub(crate) fn push_pending_audit(&mut self, event: crate::audit::PendingAudit) {
+        if self.pending_audit.len() < 200 {
+            self.pending_audit.push(event);
+        }
+    }
+
+    pub(crate) fn take_pending_audit(&mut self) -> Vec<crate::audit::PendingAudit> {
+        std::mem::take(&mut self.pending_audit)
     }
 
     pub fn paths(&self) -> &AppPaths {
@@ -206,6 +223,9 @@ impl Vault {
             Ok(d) => d,
             Err(_) => {
                 self.register_unlock_failure()?;
+                let mut ctx = serde_json::Map::new();
+                ctx.insert("attempt".into(), serde_json::Value::String("master".into()));
+                let _ = self.audit_record("unlock_failure", "failure", None, ctx);
                 return Err(VaultError::UnlockFailed);
             }
         };
@@ -214,6 +234,9 @@ impl Vault {
             // Clave crypto OK pero DB corrupta / wrong derived key → integridad
             drop(dek);
             self.register_unlock_failure()?;
+            let mut ctx = serde_json::Map::new();
+            ctx.insert("attempt".into(), serde_json::Value::String("master".into()));
+            let _ = self.audit_record("unlock_failure", "failure", None, ctx);
             return Err(e);
         }
 
@@ -228,6 +251,10 @@ impl Vault {
         // usamos API directa:
         self.install_unlocked_session(dek)?;
         self.touch_activity();
+        let _ = self.flush_pending_audit();
+        let mut ctx = serde_json::Map::new();
+        ctx.insert("attempt".into(), serde_json::Value::String("master".into()));
+        let _ = self.audit_record("unlock_success", "success", None, ctx);
         Ok(())
     }
 
@@ -265,6 +292,9 @@ impl Vault {
     }
 
     pub fn lock(&mut self) -> Result<(), VaultError> {
+        if self.session.state() == SessionState::Unlocked && self.db_is_open() {
+            let _ = self.audit_record("session_lock", "success", None, serde_json::Map::new());
+        }
         if let Some(db) = self.db.as_mut() {
             db.close();
         }
@@ -301,6 +331,7 @@ impl Vault {
             return Ok(false);
         };
         if last.elapsed() >= Duration::from_secs(limit) {
+            let _ = self.audit_record("auto_lock", "success", None, serde_json::Map::new());
             self.lock()?;
             return Ok(true);
         }

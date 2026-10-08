@@ -43,6 +43,21 @@ pub struct HistoryRow {
     pub reason: Option<String>,
 }
 
+/// Evento de auditoría (sin secretos) — Fase 7.
+#[derive(Debug, Clone)]
+pub struct AuditRow {
+    pub id: String,
+    pub sequence: i64,
+    pub timestamp: String,
+    pub event_type: String,
+    pub local_user_id: String,
+    pub object_id: Option<String>,
+    pub result: String,
+    pub context_json: Option<String>,
+    /// Reservado para hash-chain (opción B); MVP puede ser NULL.
+    pub prev_hash: Option<String>,
+}
+
 /// Política de contraseñas (sin secretos).
 #[derive(Debug, Clone)]
 pub struct PolicyRow {

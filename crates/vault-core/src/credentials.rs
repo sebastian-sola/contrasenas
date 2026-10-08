@@ -318,6 +318,16 @@ impl crate::vault::Vault {
                 reason: input.reason.clone(),
             })?;
         }
+        let mut ctx = serde_json::Map::new();
+        ctx.insert(
+            "fields_changed".into(),
+            serde_json::json!(["service_name", "password"]),
+        );
+        ctx.insert(
+            "reason_present".into(),
+            serde_json::Value::Bool(input.reason.is_some()),
+        );
+        let _ = self.audit_record("credential_create", "success", Some(&id), ctx);
         self.get_credential(&id)
     }
 
@@ -391,6 +401,7 @@ impl crate::vault::Vault {
             deleted_at: None,
             policy_id: input.policy_id,
         };
+        let reason_present = input.reason.is_some();
         {
             let db = self.db_mut()?;
             db.upsert_credential(&row)?;
@@ -407,6 +418,26 @@ impl crate::vault::Vault {
             })?;
         }
         drop(old_pw);
+        let mut ctx = serde_json::Map::new();
+        ctx.insert(
+            "fields_changed".into(),
+            serde_json::Value::Array(
+                fields
+                    .iter()
+                    .map(|f| serde_json::Value::String(f.clone()))
+                    .collect(),
+            ),
+        );
+        ctx.insert(
+            "reason_present".into(),
+            serde_json::Value::Bool(reason_present),
+        );
+        let _ = self.audit_record("credential_update", "success", Some(id), ctx);
+        if pw_changed {
+            let mut ctx2 = serde_json::Map::new();
+            ctx2.insert("field".into(), serde_json::Value::String("password".into()));
+            let _ = self.audit_record("password_change", "success", Some(id), ctx2);
+        }
         self.get_credential(id)
     }
 
@@ -429,17 +460,25 @@ impl crate::vault::Vault {
     pub fn delete_credential(&mut self, id: &str) -> Result<(), VaultError> {
         let now = now_rfc3339();
         let _dek = self.ensure_unlocked()?;
-        let db = self.db_mut()?;
-        db.soft_delete_credential(id, &now)?;
-        db.insert_history(&HistoryRow {
-            id: new_id(),
-            credential_id: id.to_string(),
-            timestamp: now,
-            actor: Some("local".into()),
-            action: "delete".into(),
-            fields_changed: None,
-            reason: None,
-        })?;
+        {
+            let db = self.db_mut()?;
+            db.soft_delete_credential(id, &now)?;
+            db.insert_history(&HistoryRow {
+                id: new_id(),
+                credential_id: id.to_string(),
+                timestamp: now,
+                actor: Some("local".into()),
+                action: "delete".into(),
+                fields_changed: None,
+                reason: None,
+            })?;
+        }
+        let _ = self.audit_record(
+            "credential_delete",
+            "success",
+            Some(id),
+            serde_json::Map::new(),
+        );
         Ok(())
     }
 
@@ -459,6 +498,12 @@ impl crate::vault::Vault {
                 reason: None,
             })?;
         }
+        let _ = self.audit_record(
+            "credential_restore",
+            "success",
+            Some(id),
+            serde_json::Map::new(),
+        );
         self.get_credential(id)
     }
 

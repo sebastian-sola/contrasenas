@@ -5,9 +5,9 @@ No envía datos a Internet. La seguridad va por delante de la comodidad.
 
 ## En qué punto estamos
 
-**Fase 6 — generador.** Puedes **crear contraseñas seguras** (generador del sistema, no al azar débil), ver qué tan fuertes son y **usarlas en una credencial** solo si tú lo decides.
+**Fase 7 — historial y auditoría.** Puedes ver **qué cambió** en cada credencial y un **registro de acciones** de la app (desbloqueos, altas, ver contraseña…), **sin** guardar las claves en ese registro.
 
-La siguiente etapa (Fase 7 — historial y auditoría) **solo empezará cuando Sebastián lo apruebe**.
+La siguiente etapa (Fase 8 — seguridad del sistema, p. ej. portapapeles) **solo empezará cuando Sebastián lo apruebe**.
 
 > Todo el desarrollo hasta ahora está en la máquina del agente cloud / este repositorio. **Nada se ha instalado en el ordenador personal de Sebastián.**
 
@@ -67,5 +67,5 @@ docs/                  → plan de seguridad y fases
 
 - No hay telemetría.
 - No subas nunca ficheros de bóveda, backups ni códigos de emergencia a Git.
-- Fase 7 (historial/auditoría) **pendiente de aprobación**.
+- Fase 8 (seguridad sistema) **pendiente de aprobación**.
 - Comprobar bóveda + CRUD: `cargo test -p vault-core -p vault-storage -p vault-backup`

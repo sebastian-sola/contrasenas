@@ -1,9 +1,10 @@
-//! Shell Tauri — Fase 6: bóveda + credenciales + políticas + generador.
+//! Shell Tauri — Fase 7: bóveda + CRUD + políticas + generador + auditoría.
 
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use vault_backup::{BackupService, StubBackupService};
+use vault_core::audit::{AuditEvent, AuditFilter};
 use vault_core::credentials::{Credential, CredentialInput, CredentialSummary, HistoryEntry};
 use vault_core::generator::{GeneratedPassword, GeneratorOptions};
 use vault_core::policy::{PasswordPolicy, PolicyInput, PolicyValidation};
@@ -275,6 +276,39 @@ fn generator_generate(
     })
 }
 
+#[tauri::command]
+fn audit_list(
+    state: tauri::State<'_, Mutex<AppState>>,
+    filter: AuditFilter,
+) -> Result<Vec<AuditEvent>, String> {
+    with_vault_mut(&state, |vault| {
+        vault.list_audit(filter).map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn audit_app_start(state: tauri::State<'_, Mutex<AppState>>) -> Result<(), String> {
+    with_vault_mut(&state, |vault| {
+        let mut ctx = serde_json::Map::new();
+        ctx.insert("source".into(), serde_json::Value::String("desktop".into()));
+        vault
+            .audit_record("app_start", "success", None, ctx)
+            .map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn audit_password_view(
+    state: tauri::State<'_, Mutex<AppState>>,
+    credential_id: String,
+) -> Result<(), String> {
+    with_vault_mut(&state, |vault| {
+        vault
+            .record_password_view(&credential_id)
+            .map_err(|e| e.to_string())
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -300,7 +334,10 @@ pub fn run() {
             policies_update,
             policies_delete,
             policies_validate,
-            generator_generate
+            generator_generate,
+            audit_list,
+            audit_app_start,
+            audit_password_view
         ])
         .run(tauri::generate_context!())
         .expect("error al arrancar Contraseñas");

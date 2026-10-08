@@ -1,7 +1,7 @@
 //! Backend SQLCipher (D2 preferido) — schema v3 con políticas.
 
 use super::permissions::set_owner_only_file_permissions;
-use super::rows::{CredentialRow, HistoryRow, PolicyRow};
+use super::rows::{AuditRow, CredentialRow, HistoryRow, PolicyRow};
 use super::{StorageBackendKind, StorageError, VaultDb};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 pub const SCHEMA_VERSION_V1: u16 = 1;
 pub const SCHEMA_VERSION_V2: u16 = 2;
 pub const SCHEMA_VERSION_V3: u16 = 3;
+pub const SCHEMA_VERSION_V4: u16 = 4;
 
 pub struct SqlCipherVaultDb {
     path: PathBuf,
@@ -175,6 +176,31 @@ impl SqlCipherVaultDb {
         Ok(())
     }
 
+    fn migrate_to_v4(&self) -> Result<(), StorageError> {
+        let conn = self.conn()?;
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS audit_events (
+                id TEXT PRIMARY KEY NOT NULL,
+                sequence INTEGER NOT NULL UNIQUE,
+                timestamp TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                local_user_id TEXT NOT NULL,
+                object_id TEXT,
+                result TEXT NOT NULL,
+                context_json TEXT,
+                prev_hash TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_events(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_audit_type ON audit_events(event_type);
+            CREATE INDEX IF NOT EXISTS idx_audit_object ON audit_events(object_id);
+            "#,
+        )
+        .map_err(|_| StorageError::Database)?;
+        self.set_schema_version(SCHEMA_VERSION_V4)?;
+        Ok(())
+    }
+
     fn map_credential_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<CredentialRow> {
         Ok(CredentialRow {
             id: r.get(0)?,
@@ -317,7 +343,7 @@ impl VaultDb for SqlCipherVaultDb {
         .map_err(|_| StorageError::Database)?;
 
         let current = self.schema_version().unwrap_or(0);
-        if current > SCHEMA_VERSION_V3 {
+        if current > SCHEMA_VERSION_V4 {
             return Err(StorageError::UnsupportedMigration);
         }
         if current < SCHEMA_VERSION_V2 {
@@ -326,6 +352,10 @@ impl VaultDb for SqlCipherVaultDb {
         let current = self.schema_version().unwrap_or(0);
         if current < SCHEMA_VERSION_V3 {
             self.migrate_to_v3()?;
+        }
+        let current = self.schema_version().unwrap_or(0);
+        if current < SCHEMA_VERSION_V4 {
+            self.migrate_to_v4()?;
         }
         Ok(())
     }
@@ -701,6 +731,109 @@ impl VaultDb for SqlCipherVaultDb {
         }
         Ok(out)
     }
+
+    fn next_audit_sequence(&self) -> Result<i64, StorageError> {
+        let conn = self.conn()?;
+        let n: i64 = conn
+            .query_row(
+                "SELECT COALESCE(MAX(sequence), 0) + 1 FROM audit_events",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(|_| StorageError::Database)?;
+        Ok(n)
+    }
+
+    fn insert_audit(&mut self, row: &AuditRow) -> Result<(), StorageError> {
+        let conn = self.conn()?;
+        conn.execute(
+            r#"
+            INSERT INTO audit_events (
+                id, sequence, timestamp, event_type, local_user_id,
+                object_id, result, context_json, prev_hash
+            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)
+            "#,
+            params![
+                row.id,
+                row.sequence,
+                row.timestamp,
+                row.event_type,
+                row.local_user_id,
+                row.object_id,
+                row.result,
+                row.context_json,
+                row.prev_hash,
+            ],
+        )
+        .map_err(|_| StorageError::Database)?;
+        Ok(())
+    }
+
+    fn list_audit(
+        &self,
+        event_type: Option<&str>,
+        object_id: Option<&str>,
+        result: Option<&str>,
+        since_ts: Option<&str>,
+        until_ts: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<AuditRow>, StorageError> {
+        let conn = self.conn()?;
+        let mut sql = String::from(
+            r#"
+            SELECT id, sequence, timestamp, event_type, local_user_id,
+                   object_id, result, context_json, prev_hash
+            FROM audit_events WHERE 1=1
+            "#,
+        );
+        let mut params_vec: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        if let Some(t) = event_type {
+            sql.push_str(" AND event_type = ?");
+            params_vec.push(Box::new(t.to_string()));
+        }
+        if let Some(o) = object_id {
+            sql.push_str(" AND object_id = ?");
+            params_vec.push(Box::new(o.to_string()));
+        }
+        if let Some(r) = result {
+            sql.push_str(" AND result = ?");
+            params_vec.push(Box::new(r.to_string()));
+        }
+        if let Some(s) = since_ts {
+            sql.push_str(" AND timestamp >= ?");
+            params_vec.push(Box::new(s.to_string()));
+        }
+        if let Some(u) = until_ts {
+            sql.push_str(" AND timestamp <= ?");
+            params_vec.push(Box::new(u.to_string()));
+        }
+        sql.push_str(" ORDER BY sequence DESC LIMIT ?");
+        params_vec.push(Box::new(limit as i64));
+
+        let mut stmt = conn.prepare(&sql).map_err(|_| StorageError::Database)?;
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt
+            .query_map(param_refs.as_slice(), |r| {
+                Ok(AuditRow {
+                    id: r.get(0)?,
+                    sequence: r.get(1)?,
+                    timestamp: r.get(2)?,
+                    event_type: r.get(3)?,
+                    local_user_id: r.get(4)?,
+                    object_id: r.get(5)?,
+                    result: r.get(6)?,
+                    context_json: r.get(7)?,
+                    prev_hash: r.get(8)?,
+                })
+            })
+            .map_err(|_| StorageError::Database)?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row.map_err(|_| StorageError::Database)?);
+        }
+        Ok(out)
+    }
 }
 
 impl Drop for SqlCipherVaultDb {
@@ -721,7 +854,7 @@ mod tests {
         let key = [7u8; 32];
         let mut db = SqlCipherVaultDb::new(path.clone());
         db.create(&key).unwrap();
-        assert_eq!(db.schema_version().unwrap(), SCHEMA_VERSION_V3);
+        assert_eq!(db.schema_version().unwrap(), SCHEMA_VERSION_V4);
         db.close();
 
         let mut db2 = SqlCipherVaultDb::new(path.clone());
