@@ -1,6 +1,6 @@
 # Seguridad — Contraseñas
 
-**Fase 8 · Crypto + bóveda + CRUD + políticas + generador + auditoría + clipboard/backups/logs**
+**Fase 10 · Plan base completo · Ver también `SECURITY_REVIEW.md`**
 
 Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas (§35).
 
