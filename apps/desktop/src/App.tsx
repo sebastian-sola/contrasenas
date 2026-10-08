@@ -201,7 +201,29 @@ function App() {
   const [recoveryOnce, setRecoveryOnce] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [tab, setTab] = useState<"creds" | "policies">("creds");
+  const [tab, setTab] = useState<"creds" | "policies" | "generator">("creds");
+  const [genOpts, setGenOpts] = useState({
+    length: 20,
+    uppercase: true,
+    lowercase: true,
+    digits: true,
+    symbols: true,
+    avoidAmbiguous: true,
+    customCharset: "",
+    exclude: "",
+    policyId: "",
+  });
+  const [generated, setGenerated] = useState<{
+    password: string;
+    length: number;
+    entropyBits: number;
+    strengthLabel: string;
+    charsetSize: number;
+    policyCompliant: boolean | null;
+    policyViolations: string[];
+    rng: string;
+  } | null>(null);
+  const [showGenPassword, setShowGenPassword] = useState(true);
   const [items, setItems] = useState<CredentialSummary[]>([]);
   const [policies, setPolicies] = useState<PasswordPolicy[]>([]);
   const [query, setQuery] = useState("");
@@ -605,27 +627,93 @@ function App() {
     return policies.find((p) => p.id === id)?.name ?? "Política";
   }
 
+  async function onGenerate() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await invoke<{
+        password: string;
+        length: number;
+        entropyBits: number;
+        strengthLabel: string;
+        charsetSize: number;
+        policyCompliant: boolean | null;
+        policyViolations: string[];
+        rng: string;
+      }>("generator_generate", {
+        options: {
+          length: genOpts.length,
+          uppercase: genOpts.uppercase,
+          lowercase: genOpts.lowercase,
+          digits: genOpts.digits,
+          symbols: genOpts.symbols,
+          avoidAmbiguous: genOpts.avoidAmbiguous,
+          customCharset: opt(genOpts.customCharset),
+          exclude: genOpts.exclude,
+        },
+        policyId: opt(genOpts.policyId),
+        credentialId: null,
+      });
+      setGenerated(result);
+      setShowGenPassword(true);
+      setMessage(
+        result.policyCompliant === false
+          ? "Generada, pero no cumple la política."
+          : "Contraseña generada (aún no guardada).",
+      );
+    } catch (err) {
+      setMessage(String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function useGeneratedInForm() {
+    if (!generated) return;
+    setTab("creds");
+    setMode("create");
+    setSelectedId(null);
+    setDetail(null);
+    setForm({
+      ...emptyForm(),
+      password: generated.password,
+      policyId: genOpts.policyId,
+      nextRenewalAt: daysFromNowInput(45),
+    });
+    setShowPassword(true);
+    setMessage(
+      "Contraseña copiada al formulario. Completa el servicio y pulsa Guardar si quieres guardarla.",
+    );
+  }
+
   if (info?.sessionState === "unlocked") {
     return (
       <main className="vault-app">
         <header className="vault-top">
           <div>
             <p className="brand">Contraseñas</p>
-            <h1>{tab === "creds" ? "Tus credenciales" : "Políticas"}</h1>
+            <h1>
+              {tab === "creds"
+                ? "Tus credenciales"
+                : tab === "policies"
+                  ? "Políticas"
+                  : "Generador"}
+            </h1>
             <p className="lede">
-              Fase {info.phase}: reglas de contraseña por servicio e indicadores
-              de cumplimiento.
+              Fase {info.phase}: generador seguro (CSPRNG). No se guarda sola —
+              tú decides si usarla en una credencial.
             </p>
           </div>
           <div className="vault-actions">
             <button type="button" className="secondary" onClick={onLock}>
               Bloquear
             </button>
-            {tab === "creds" ? (
+            {tab === "creds" && (
               <button type="button" onClick={openCreate}>
                 Nueva
               </button>
-            ) : (
+            )}
+            {tab === "policies" && (
               <button type="button" onClick={openPolicyCreate}>
                 Nueva política
               </button>
@@ -650,6 +738,16 @@ function App() {
             }}
           >
             Políticas
+          </button>
+          <button
+            type="button"
+            className={tab === "generator" ? "tab active" : "tab"}
+            onClick={() => {
+              setTab("generator");
+              void loadPolicies();
+            }}
+          >
+            Generador
           </button>
         </nav>
 
@@ -1276,6 +1374,228 @@ function App() {
             </section>
           </div>
         )}
+
+        {tab === "generator" && (
+          <div className="vault-grid gen-grid">
+            <section className="panel" aria-label="Opciones generador">
+              <h2>Opciones</h2>
+              <label htmlFor="glen">Longitud: {genOpts.length}</label>
+              <input
+                id="glen"
+                type="range"
+                min={8}
+                max={64}
+                value={genOpts.length}
+                onChange={(e) =>
+                  setGenOpts({
+                    ...genOpts,
+                    length: Number(e.currentTarget.value),
+                  })
+                }
+              />
+              <fieldset className="checks">
+                <legend>Conjuntos</legend>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={genOpts.lowercase}
+                    onChange={(e) =>
+                      setGenOpts({
+                        ...genOpts,
+                        lowercase: e.currentTarget.checked,
+                      })
+                    }
+                  />{" "}
+                  Minúsculas
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={genOpts.uppercase}
+                    onChange={(e) =>
+                      setGenOpts({
+                        ...genOpts,
+                        uppercase: e.currentTarget.checked,
+                      })
+                    }
+                  />{" "}
+                  Mayúsculas
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={genOpts.digits}
+                    onChange={(e) =>
+                      setGenOpts({
+                        ...genOpts,
+                        digits: e.currentTarget.checked,
+                      })
+                    }
+                  />{" "}
+                  Números
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={genOpts.symbols}
+                    onChange={(e) =>
+                      setGenOpts({
+                        ...genOpts,
+                        symbols: e.currentTarget.checked,
+                      })
+                    }
+                  />{" "}
+                  Símbolos
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={genOpts.avoidAmbiguous}
+                    onChange={(e) =>
+                      setGenOpts({
+                        ...genOpts,
+                        avoidAmbiguous: e.currentTarget.checked,
+                      })
+                    }
+                  />{" "}
+                  Evitar ambiguos (0Ool1I|)
+                </label>
+              </fieldset>
+              <label htmlFor="gex">Excluir caracteres</label>
+              <input
+                id="gex"
+                value={genOpts.exclude}
+                onChange={(e) =>
+                  setGenOpts({ ...genOpts, exclude: e.currentTarget.value })
+                }
+                placeholder="opcional"
+              />
+              <label htmlFor="gcustom">Charset personalizado</label>
+              <input
+                id="gcustom"
+                value={genOpts.customCharset}
+                onChange={(e) =>
+                  setGenOpts({
+                    ...genOpts,
+                    customCharset: e.currentTarget.value,
+                  })
+                }
+                placeholder="vacío = usar conjuntos de arriba"
+              />
+              <label htmlFor="gpol">Generar según política</label>
+              <select
+                id="gpol"
+                value={genOpts.policyId}
+                onChange={(e) =>
+                  setGenOpts({ ...genOpts, policyId: e.currentTarget.value })
+                }
+              >
+                <option value="">Ninguna (solo opciones)</option>
+                {policies.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <div className="form-actions">
+                <button
+                  type="button"
+                  onClick={() => void onGenerate()}
+                  disabled={busy}
+                >
+                  Generar
+                </button>
+              </div>
+            </section>
+
+            <section className="panel" aria-label="Resultado generador">
+              <h2>Resultado</h2>
+              {!generated ? (
+                <p className="empty">
+                  Pulsa <strong>Generar</strong>. La clave no se guarda sola.
+                </p>
+              ) : (
+                <div className="gen-result">
+                  <div className="pw-row">
+                    <code className="gen-pw">
+                      {showGenPassword
+                        ? generated.password
+                        : "••••••••••••••••"}
+                    </code>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => setShowGenPassword((v) => !v)}
+                    >
+                      {showGenPassword ? "Ocultar" : "Mostrar"}
+                    </button>
+                  </div>
+                  <dl className="detail-fields">
+                    <div>
+                      <dt>Longitud</dt>
+                      <dd>{generated.length}</dd>
+                    </div>
+                    <div>
+                      <dt>Entropía ≈</dt>
+                      <dd>{generated.entropyBits.toFixed(1)} bits</dd>
+                    </div>
+                    <div>
+                      <dt>Fortaleza</dt>
+                      <dd>
+                        <span
+                          className={`badge strength-${generated.strengthLabel
+                            .toLowerCase()
+                            .replace(/\s+/g, "-")}`}
+                        >
+                          {generated.strengthLabel}
+                        </span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Charset</dt>
+                      <dd>{generated.charsetSize} símbolos</dd>
+                    </div>
+                    <div>
+                      <dt>RNG</dt>
+                      <dd>
+                        <code>{generated.rng}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Política</dt>
+                      <dd>
+                        {generated.policyCompliant == null
+                          ? "—"
+                          : generated.policyCompliant
+                            ? "Cumple"
+                            : `No cumple: ${generated.policyViolations
+                                .map(violationLabel)
+                                .join(", ")}`}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void onGenerate()}
+                      disabled={busy}
+                    >
+                      Otra
+                    </button>
+                    <button type="button" onClick={useGeneratedInForm}>
+                      Usar en nueva credencial
+                    </button>
+                  </div>
+                  <p className="hint">
+                    No se ha guardado en la bóveda. Solo se guarda si completas
+                    el formulario y pulsas Guardar.
+                  </p>
+                </div>
+              )}
+            </section>
+          </div>
+        )}
       </main>
     );
   }
@@ -1290,8 +1610,8 @@ function App() {
             : "Bóveda bloqueada"}
         </h1>
         <p className="lede">
-          Fase <strong>5</strong>: políticas de contraseña por servicio y
-          comprobación de cumplimiento.
+          Fase <strong>6</strong>: generador seguro de contraseñas (CSPRNG) y
+          estimación de fortaleza.
         </p>
 
         {info && !info.vaultExists && info.sessionState === "locked" && (

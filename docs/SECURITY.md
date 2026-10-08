@@ -1,6 +1,6 @@
 # Seguridad — Contraseñas
 
-**Fase 5 · Crypto + bóveda + CRUD + motor de políticas**
+**Fase 6 · Crypto + bóveda + CRUD + políticas + generador CSPRNG**
 
 Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas (§35).
 
@@ -24,6 +24,8 @@ Complementa `THREAT_MODEL.md` y `ARCHITECTURE.md`. Sin afirmaciones absolutistas
 | Kit emergencia persistido (wrap en cabecera) | ✅ Fase 3 (código solo al crear) |
 | CRUD credenciales | ✅ Fase 4 (password/notas AEAD; historial solo metadatos) |
 | Motor de políticas §8 | ✅ Fase 5 (validación sin loguear plaintext; huellas previas) |
+| Generador CSPRNG §9 | ✅ Fase 6 (`OsRng` / `os_csprng`; no auto-guarda; Debug redacta) |
+| Fortaleza §10 | ✅ Fase 6 (entropía `len×log2(charset)`; etiquetas Muy débil→Muy fuerte) |
 
 Errores (`CryptoError`, `SessionError`, `RecoveryError`): mensajes genéricos; **nunca** incluyen passwords, claves ni ciphertext interpretado como secreto en logs de error.
 

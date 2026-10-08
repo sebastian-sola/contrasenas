@@ -1,6 +1,6 @@
 //! Núcleo de la bóveda Contraseñas.
 //!
-//! Fase 5: criptografía + bóveda + CRUD credenciales + motor de políticas.
+//! Fase 6: criptografía + bóveda + CRUD + políticas + generador CSPRNG.
 
 #![forbid(unsafe_code)]
 
@@ -8,6 +8,7 @@ pub mod audit;
 pub mod backoff;
 pub mod credentials;
 pub mod crypto;
+pub mod generator;
 pub mod paths;
 pub mod policy;
 pub mod recovery;
@@ -21,6 +22,10 @@ pub use crypto::{
     bootstrap_key_material, bootstrap_key_material_with_params, decrypt, derive_db_key, encrypt,
     unlock_dek_with_master, CryptoEngine, CryptoError, CryptoHeaderV1, DataEncryptionKey,
     KdfParams, ProductionCryptoEngine, CRYPTO_FORMAT_VERSION,
+};
+pub use generator::{
+    build_charset, estimate_strength, generate, generate_for_policy, options_from_policy,
+    GeneratedPassword, GeneratorError, GeneratorOptions, GENERATOR_RNG_ID,
 };
 pub use paths::AppPaths;
 pub use policy::{
@@ -38,15 +43,15 @@ pub use vault_header::{VaultFileHeader, VAULT_SCHEMA_VERSION};
 pub const APP_SCHEMA_VERSION: u16 = 3;
 
 /// Fase de desarrollo implementada en este crate.
-pub const IMPLEMENTED_PHASE: u8 = 5;
+pub const IMPLEMENTED_PHASE: u8 = 6;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn phase_is_five() {
-        assert_eq!(IMPLEMENTED_PHASE, 5);
+    fn phase_is_six() {
+        assert_eq!(IMPLEMENTED_PHASE, 6);
     }
 
     #[test]

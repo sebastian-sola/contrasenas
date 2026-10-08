@@ -1,10 +1,11 @@
-//! Shell Tauri — Fase 5: bóveda + credenciales + políticas.
+//! Shell Tauri — Fase 6: bóveda + credenciales + políticas + generador.
 
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use vault_backup::{BackupService, StubBackupService};
 use vault_core::credentials::{Credential, CredentialInput, CredentialSummary, HistoryEntry};
+use vault_core::generator::{GeneratedPassword, GeneratorOptions};
 use vault_core::policy::{PasswordPolicy, PolicyInput, PolicyValidation};
 use vault_core::recovery::{ProductionRecoveryKit, RecoveryKit};
 use vault_core::session::SessionState;
@@ -260,6 +261,20 @@ fn policies_validate(
     result
 }
 
+#[tauri::command]
+fn generator_generate(
+    state: tauri::State<'_, Mutex<AppState>>,
+    options: GeneratorOptions,
+    policy_id: Option<String>,
+    credential_id: Option<String>,
+) -> Result<GeneratedPassword, String> {
+    with_vault_mut(&state, |vault| {
+        vault
+            .generate_password(options, policy_id.as_deref(), credential_id.as_deref())
+            .map_err(|e| e.to_string())
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -284,7 +299,8 @@ pub fn run() {
             policies_create,
             policies_update,
             policies_delete,
-            policies_validate
+            policies_validate,
+            generator_generate
         ])
         .run(tauri::generate_context!())
         .expect("error al arrancar Contraseñas");

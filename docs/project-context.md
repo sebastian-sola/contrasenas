@@ -1,6 +1,6 @@
 # Contexto de proyecto — Contraseñas
 
-**Actualizado:** 2026-10-07 · Fase 5 (políticas)
+**Actualizado:** 2026-10-08 · Fase 6 (generador)
 
 ## Qué es
 
@@ -30,8 +30,8 @@ Gestor de contraseñas/secretos de **escritorio local**, offline-first, con prio
 
 ## Estado del trabajo
 
-- **Fases 0–5** ✅.
-- **Siguiente:** Fase 6 (generador) **tras aprobación explícita**.
+- **Fases 0–6** ✅.
+- **Siguiente:** Fase 7 (historial/auditoría) **tras aprobación explícita**.
 - **Nota:** todo el trabajo es en la VM/repo del agente cloud; nada instalado en el PC de Sebastián.
 
 ## Rutas canónicas

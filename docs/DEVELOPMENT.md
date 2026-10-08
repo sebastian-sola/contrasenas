@@ -1,6 +1,6 @@
 # Plan de desarrollo por fases — Contraseñas
 
-**Estado:** Fase 5 ✅ completada · **Fase 6 pendiente de aprobación**
+**Estado:** Fase 6 ✅ completada · **Fase 7 pendiente de aprobación**
 
 Alineado con requisito §36. Prioridad: seguridad de secretos. Entre fases: checklist §37 + revisión de amenazas §39.
 
@@ -75,16 +75,21 @@ Argon2id + AES-256-GCM + DEK wrap + kit crypto en memoria. Tests verdes.
 
 **Gate:** ✅ tests de reglas + CRUD/attach compliance; sin secretos en resultado de validación.  
 **Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup`  
-**Siguiente:** Fase 6 (generador) **solo tras aprobación explícita**.
+**Siguiente:** Fase 6 hecha.
 
 ---
 
-## FASE 6 — Generador
+## FASE 6 — Generador ✅ (esta entrega)
 
-- CSPRNG; opciones §9; fortaleza; cumplimiento de política.
-- No autoguardar.
+- CSPRNG via `OsRng` (`rng: os_csprng`); nunca `Math.random` / RNG no cripto.
+- Opciones §9: longitud, upper/lower/digit/symbol, evitar ambiguos, charset custom, exclusiones, generar desde política.
+- UI Generador: muestra password, longitud, entropía bits, etiqueta §10 (Muy débil→Muy fuerte), cumplimiento de política.
+- No autoguarda; botón «Usar en nueva credencial».
+- Captura: `media/fase6-generador.png`.
 
-**Gate:** tests CSPRNG / charset; sin `Math.random`.
+**Gate:** ✅ tests CSPRNG / charset / política / fortaleza / debug redacted / no autosave.  
+**Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup`  
+**Siguiente:** Fase 7 (historial/auditoría UI) **solo tras aprobación explícita**.
 
 ---
 

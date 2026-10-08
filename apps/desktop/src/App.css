@@ -535,6 +535,56 @@ select {
   margin: 0.5rem 0 0;
 }
 
+.gen-grid {
+  align-items: stretch;
+}
+
+.gen-pw {
+  font-size: 1.05rem;
+  word-break: break-all;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--stroke);
+}
+
+.gen-result .hint {
+  margin-top: 1rem;
+}
+
+.badge.strength-muy-débil,
+.badge.strength-muy-debil {
+  border-color: var(--exp-red);
+  color: var(--exp-red);
+}
+
+.badge.strength-débil,
+.badge.strength-debil {
+  border-color: var(--exp-orange);
+  color: var(--exp-orange);
+}
+
+.badge.strength-media {
+  border-color: var(--exp-yellow);
+  color: var(--exp-yellow);
+}
+
+.badge.strength-fuerte {
+  border-color: var(--exp-green);
+  color: var(--exp-green);
+}
+
+.badge.strength-muy-fuerte {
+  background: rgba(62, 207, 142, 0.18);
+  border-color: var(--exp-green);
+  color: var(--exp-green);
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
 @media (max-width: 800px) {
   .vault-grid {
     grid-template-columns: 1fr;
