@@ -1,6 +1,6 @@
 # Plan de desarrollo por fases — Contraseñas
 
-**Estado:** Fase 8 ✅ completada · **Fase 9 pendiente de aprobación explícita de Sebastián**
+**Estado:** Fase 9 ✅ completada · **Fase 10 pendiente de aprobación explícita de Sebastián** (última fase del plan base)
 
 Alineado con requisito §36. Prioridad: seguridad de secretos. Entre fases: checklist §37 + revisión de amenazas §39.
 
@@ -111,19 +111,22 @@ Argon2id + AES-256-GCM + DEK wrap + kit crypto en memoria. Tests verdes.
 
 **Gate:** ✅ tests clipboard/settings helpers, backup round-trip + integridad, plaintext export blocked, secrets no en logs.  
 **Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup`  
-**Siguiente:** Fase 9 (UI pulida) **solo tras OK explícito de Sebastián**.
+**Siguiente:** Fase 9 hecha.
 
 ---
 
-## FASE 9 — UI completa
+## FASE 9 — UI completa ✅ (esta entrega)
 
-- Todas las pantallas §13 pulidas.
-- Dashboard con avisos caducidad.
-- Configuración (timeouts, clipboard, temas) — base ya en F8; pulido visual aquí.
-- UX de reutilización y fortaleza (zxcvbn offline opcional aquí o F6+).
+- Pantallas §13 pulidas con lenguaje visual coherente (marca Contraseñas, tipografía Fraunces/DM Sans, fondo atmosférico bosque/teal — sin clichés púrpura).
+- Bloqueo / crear / abrir: hero de marca; sin datos de bóveda antes del unlock; textos en español sencillo.
+- **Inicio (dashboard):** total, caducan pronto, caducadas, débiles/sin regla, reutilizadas, cambiadas (7 días).
+- Contraseñas (lista + detalle + crear/editar), Reglas, Generador, Actividad, Ajustes — misma navegación.
+- Estados vacío / carga / error; ventana redimensionable (mín. 720×520).
+- Seguridad no se relaja por estética.
+- Capturas: `media/fase9-bloqueo.png`, `media/fase9-dashboard.png`, `media/fase9-credenciales.png`.
 
-**Gate:** usable end-to-end offline en plataforma prioritaria.  
-**No empezar sin aprobación de Sebastián.**
+**Gate:** ✅ app usable offline end-to-end en desktop; tests crates verdes.  
+**Siguiente:** Fase 10 (hardening / release) **solo tras OK explícito de Sebastián**. Tras F10 no quedan fases del plan base.
 
 ---
 
