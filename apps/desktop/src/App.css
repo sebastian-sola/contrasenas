@@ -624,6 +624,11 @@ input[type="range"] {
   word-break: break-all;
 }
 
+.clipboard-toast {
+  border-color: rgba(62, 207, 142, 0.45);
+  background: rgba(62, 207, 142, 0.12);
+}
+
 @media (max-width: 800px) {
   .vault-grid {
     grid-template-columns: 1fr;

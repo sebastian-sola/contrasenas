@@ -202,8 +202,24 @@ function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [tab, setTab] = useState<
-    "creds" | "policies" | "generator" | "audit"
+    "creds" | "policies" | "generator" | "audit" | "settings"
   >("creds");
+  const [appSettings, setAppSettings] = useState({
+    autoLockSecs: 300,
+    clipboardClearSecs: 30,
+  });
+  const [backupList, setBackupList] = useState<
+    {
+      path: string;
+      backupVersion: number;
+      vaultId: string;
+      createdAt: string;
+      schemaVersion: number;
+      contentHash: string;
+    }[]
+  >([]);
+  const [backupMaster, setBackupMaster] = useState("");
+  const [clipboardToast, setClipboardToast] = useState<string | null>(null);
   const [auditEvents, setAuditEvents] = useState<
     {
       id: string;
@@ -372,6 +388,8 @@ function App() {
       } catch {
         /* ignore if already recorded */
       }
+      await loadSettings();
+      await loadBackups();
       setMode("list");
       setSelectedId(null);
       setDetail(null);
@@ -379,6 +397,157 @@ function App() {
       setMessage(String(err));
       setPassword("");
       await refresh();
+    }
+  }
+
+  async function loadSettings() {
+    try {
+      const s = await invoke<{
+        autoLockSecs: number;
+        clipboardClearSecs: number;
+      }>("settings_get");
+      setAppSettings(s);
+    } catch (err) {
+      setMessage(String(err));
+    }
+  }
+
+  async function loadBackups() {
+    try {
+      const list = await invoke<typeof backupList>("backup_list");
+      setBackupList(list);
+    } catch (err) {
+      setMessage(String(err));
+    }
+  }
+
+  async function copyToClipboard(text: string, field: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      await invoke("clipboard_copied", { field });
+      const secs = appSettings.clipboardClearSecs;
+      if (secs > 0) {
+        setClipboardToast(
+          `Copiado. Se borrará del portapapeles en ${secs}s (límites del SO pueden aplicar).`,
+        );
+        window.setTimeout(() => {
+          void navigator.clipboard.writeText("").catch(() => undefined);
+          setClipboardToast("Portapapeles limpiado.");
+          window.setTimeout(() => setClipboardToast(null), 2500);
+        }, secs * 1000);
+      } else {
+        setClipboardToast(
+          "Copiado. Auto-borrado desactivado (Configuración).",
+        );
+        window.setTimeout(() => setClipboardToast(null), 3000);
+      }
+    } catch (err) {
+      setMessage(String(err));
+    }
+  }
+
+  async function saveSettings(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const s = await invoke<typeof appSettings>("settings_update", {
+        settings: appSettings,
+      });
+      setAppSettings(s);
+      setMessage("Configuración guardada.");
+    } catch (err) {
+      setMessage(String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onCreateBackup() {
+    if (!backupMaster) {
+      setMessage("Introduce la contraseña maestra para cifrar el backup.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const info = await invoke<(typeof backupList)[0]>("backup_create", {
+        masterPassword: backupMaster,
+        dest: null,
+      });
+      setBackupMaster("");
+      setMessage(`Backup creado: ${info.path}`);
+      await loadBackups();
+    } catch (err) {
+      setMessage(String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onVerifyBackup(path: string) {
+    if (!backupMaster) {
+      setMessage("Introduce la contraseña maestra para verificar.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await invoke("backup_verify", {
+        path,
+        masterPassword: backupMaster,
+      });
+      setMessage("Integridad OK.");
+    } catch (err) {
+      setMessage(String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRestoreBackup(path: string) {
+    if (!backupMaster) {
+      setMessage("Introduce la contraseña maestra para restaurar.");
+      return;
+    }
+    const ok = window.confirm(
+      "¿Restaurar este backup? Se hará copia preventiva de la bóveda actual antes de sobrescribir.",
+    );
+    if (!ok) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await invoke("backup_restore", {
+        path,
+        masterPassword: backupMaster,
+        confirmOverwrite: true,
+      });
+      setMessage(
+        "Backup restaurado. Vuelve a desbloquear la bóveda si hace falta.",
+      );
+      await refresh();
+      await loadBackups();
+    } catch (err) {
+      setMessage(String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDeleteBackup(path: string) {
+    const ok = window.confirm(
+      "¿Borrar este archivo de backup? Esta acción pide confirmación explícita (no se auto-borran).",
+    );
+    if (!ok) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await invoke("backup_delete", { path, confirmed: true });
+      setMessage("Backup eliminado.");
+      await loadBackups();
+    } catch (err) {
+      setMessage(String(err));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -743,11 +912,13 @@ function App() {
                   ? "Políticas"
                   : tab === "generator"
                     ? "Generador"
-                    : "Auditoría"}
+                    : tab === "audit"
+                      ? "Auditoría"
+                      : "Configuración"}
             </h1>
             <p className="lede">
-              Fase {info.phase}: historial de cambios y registro de acciones
-              (sin contraseñas ni secretos).
+              Fase {info.phase}: portapapeles, bloqueo automático y backups
+              cifrados.
             </p>
           </div>
           <div className="vault-actions">
@@ -805,7 +976,24 @@ function App() {
           >
             Auditoría
           </button>
+          <button
+            type="button"
+            className={tab === "settings" ? "tab active" : "tab"}
+            onClick={() => {
+              setTab("settings");
+              void loadSettings();
+              void loadBackups();
+            }}
+          >
+            Configuración
+          </button>
         </nav>
+
+        {clipboardToast && (
+          <p className="toast banner clipboard-toast" role="status">
+            {clipboardToast}
+          </p>
+        )}
 
         {message && (
           <p className="toast banner" role="status">
@@ -1069,6 +1257,15 @@ function App() {
                           }}
                         >
                           {showPassword ? "Ocultar" : "Mostrar"}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() =>
+                            void copyToClipboard(detail.password, "password")
+                          }
+                        >
+                          Copiar
                         </button>
                       </dd>
                     </div>
@@ -1688,6 +1885,10 @@ function App() {
                 <option value="credential_restore">credential_restore</option>
                 <option value="password_change">password_change</option>
                 <option value="password_view">password_view</option>
+                <option value="clipboard_copy">clipboard_copy</option>
+                <option value="backup_create">backup_create</option>
+                <option value="backup_restore">backup_restore</option>
+                <option value="settings_change">settings_change</option>
               </select>
               <label htmlFor="afres">Resultado</label>
               <select
@@ -1774,6 +1975,140 @@ function App() {
             </section>
           </div>
         )}
+
+        {tab === "settings" && (
+          <div className="vault-grid">
+            <section className="panel" aria-label="Ajustes">
+              <h2>Seguridad</h2>
+              <form className="cred-form" onSubmit={saveSettings}>
+                <label htmlFor="alock">Auto-bloqueo (segundos)</label>
+                <select
+                  id="alock"
+                  value={appSettings.autoLockSecs}
+                  onChange={(e) =>
+                    setAppSettings({
+                      ...appSettings,
+                      autoLockSecs: Number(e.currentTarget.value),
+                    })
+                  }
+                >
+                  <option value={60}>60 s</option>
+                  <option value={300}>5 min (300)</option>
+                  <option value={900}>15 min</option>
+                  <option value={0}>Nunca (0)</option>
+                </select>
+                <label htmlFor="clip">Borrar portapapeles tras</label>
+                <select
+                  id="clip"
+                  value={appSettings.clipboardClearSecs}
+                  onChange={(e) =>
+                    setAppSettings({
+                      ...appSettings,
+                      clipboardClearSecs: Number(e.currentTarget.value),
+                    })
+                  }
+                >
+                  <option value={10}>10 s</option>
+                  <option value={30}>30 s (defecto)</option>
+                  <option value={60}>60 s</option>
+                  <option value={0}>Desactivado</option>
+                </select>
+                <p className="hint">
+                  El SO puede conservar el historial del portapapeles; no hay
+                  borrado absoluto garantizado.
+                </p>
+                <p className="hint">
+                  Borrado en disco: en SSD el «borrado seguro» no está
+                  garantizado; usamos archivado (soft-delete) + cifrado.
+                </p>
+                <div className="form-actions">
+                  <button type="submit" disabled={busy}>
+                    Guardar ajustes
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section className="panel" aria-label="Backups">
+              <h2>Backups cifrados (.cpbak)</h2>
+              <label htmlFor="bmaster">Contraseña maestra (para cifrar)</label>
+              <input
+                id="bmaster"
+                type="password"
+                value={backupMaster}
+                onChange={(e) => setBackupMaster(e.currentTarget.value)}
+                autoComplete="off"
+              />
+              <div className="form-actions">
+                <button
+                  type="button"
+                  onClick={() => void onCreateBackup()}
+                  disabled={busy}
+                >
+                  Crear backup
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    void invoke("export_plaintext_blocked").catch((err) =>
+                      setMessage(String(err)),
+                    );
+                  }}
+                >
+                  Exportar texto plano (bloqueado)
+                </button>
+              </div>
+              <p className="hint">
+                Exportar en claro está bloqueado. Importar de otros gestores
+                requiere confirmación explícita (aún stub).
+              </p>
+              <h3>Copias locales</h3>
+              {backupList.length === 0 ? (
+                <p className="empty">Aún no hay backups en la carpeta local.</p>
+              ) : (
+                <ul className="audit-list">
+                  {backupList.map((b) => (
+                    <li key={b.path} className="audit-row">
+                      <div className="audit-head">
+                        <strong>v{b.backupVersion}</strong>
+                        <span className="badge compliant">
+                          schema {b.schemaVersion}
+                        </span>
+                      </div>
+                      <div className="audit-meta">
+                        {b.createdAt} · {b.path}
+                      </div>
+                      <div className="form-actions">
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => void onVerifyBackup(b.path)}
+                        >
+                          Verificar
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => void onRestoreBackup(b.path)}
+                        >
+                          Restaurar
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => void onDeleteBackup(b.path)}
+                        >
+                          Borrar
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        )}
       </main>
     );
   }
@@ -1788,8 +2123,8 @@ function App() {
             : "Bóveda bloqueada"}
         </h1>
         <p className="lede">
-          Fase <strong>7</strong>: historial de cambios y auditoría cifrada
-          (sin secretos).
+          Fase <strong>8</strong>: portapapeles con auto-borrado, backups
+          cifrados y configuración.
         </p>
 
         {info && !info.vaultExists && info.sessionState === "locked" && (

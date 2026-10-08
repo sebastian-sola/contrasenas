@@ -120,6 +120,15 @@ impl Vault {
         &self.paths
     }
 
+    /// Actualiza auto_lock en cabecera + settings DB (Fase 8).
+    pub(crate) fn set_auto_lock_secs_persist(&mut self, secs: u64) -> Result<(), VaultError> {
+        if let Some(h) = self.header.as_mut() {
+            h.auto_lock_secs = secs;
+            h.save(&self.paths.vault_header())?;
+        }
+        Ok(())
+    }
+
     pub fn exists(&self) -> bool {
         self.paths.vault_header().exists() && self.paths.vault_db().exists()
     }

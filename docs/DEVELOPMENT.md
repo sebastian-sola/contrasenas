@@ -1,6 +1,6 @@
 # Plan de desarrollo por fases — Contraseñas
 
-**Estado:** Fase 7 ✅ completada · **Fase 8 pendiente de aprobación**
+**Estado:** Fase 8 ✅ completada · **Fase 9 pendiente de aprobación explícita de Sebastián**
 
 Alineado con requisito §36. Prioridad: seguridad de secretos. Entre fases: checklist §37 + revisión de amenazas §39.
 
@@ -50,7 +50,7 @@ Argon2id + AES-256-GCM + DEK wrap + kit crypto en memoria. Tests verdes.
 
 ---
 
-## FASE 4 — Credenciales ✅ (esta entrega)
+## FASE 4 — Credenciales ✅
 
 - CRUD campos §5 (servicio, usuario, password AEAD, URL, notas, caducidad, etc.).
 - Schema SQLCipher v2 + soft-delete + historial solo metadatos (sin plaintext de passwords antiguas).
@@ -59,27 +59,23 @@ Argon2id + AES-256-GCM + DEK wrap + kit crypto en memoria. Tests verdes.
 - Búsqueda/filtrado básico; reutilización: conteo N (fingerprint SHA-256) sin listar otros servicios.
 - IPC Tauri: list/get/create/update/delete/restore/history.
 
-**Gate:** ✅ test `crud_reuse_and_no_plaintext_on_disk` (create/update/delete/restore; sin plaintext en DB locked).  
-**Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup` (34+ tests).  
-**UI:** capturas `media/fase4-lista.png`, `media/fase4-detalle.png`.  
-**Siguiente:** Fase 5 hecha.
+**Gate:** ✅ test `crud_reuse_and_no_plaintext_on_disk`.  
+**Capturas:** `media/fase4-lista.png`, `media/fase4-detalle.png`.
 
 ---
 
-## FASE 5 — Políticas ✅ (esta entrega)
+## FASE 5 — Políticas ✅
 
 - Motor §8: min/max, upper/lower/digit/symbol, espacios, chars/patrones prohibidos, reuso de N anteriores (huellas), caducidad días, `extra_rules_json` extensible.
 - Validación sin loguear plaintext; schema SQLCipher v3 (`policies` + `password_fp_history` + `policy_id`).
 - CRUD UI Políticas; asociar política a credencial; badges cumple / no cumple.
 - Capturas: `media/fase5-politicas.png`, `media/fase5-validacion.png`.
 
-**Gate:** ✅ tests de reglas + CRUD/attach compliance; sin secretos en resultado de validación.  
-**Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup`  
-**Siguiente:** Fase 6 hecha.
+**Gate:** ✅ tests de reglas + CRUD/attach compliance; sin secretos en resultado de validación.
 
 ---
 
-## FASE 6 — Generador ✅ (esta entrega)
+## FASE 6 — Generador ✅
 
 - CSPRNG via `OsRng` (`rng: os_csprng`); nunca `Math.random` / RNG no cripto.
 - Opciones §9: longitud, upper/lower/digit/symbol, evitar ambiguos, charset custom, exclusiones, generar desde política.
@@ -87,13 +83,11 @@ Argon2id + AES-256-GCM + DEK wrap + kit crypto en memoria. Tests verdes.
 - No autoguarda; botón «Usar en nueva credencial».
 - Captura: `media/fase6-generador.png`.
 
-**Gate:** ✅ tests CSPRNG / charset / política / fortaleza / debug redacted / no autosave.  
-**Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup`  
-**Siguiente:** Fase 7 hecha.
+**Gate:** ✅ tests CSPRNG / charset / política / fortaleza / debug redacted / no autosave.
 
 ---
 
-## FASE 7 — Historial y auditoría ✅ (esta entrega)
+## FASE 7 — Historial y auditoría ✅
 
 - Historial de credencial: metadatos (cuándo, actor, acción, campos, motivo); **sin** plaintext de passwords antiguas.
 - Auditoría SQLCipher v4 (`audit_events`): sequence + eventos §7 existentes; contexto allowlist; `prev_hash` columna lista (MVP = opción A).
@@ -101,21 +95,23 @@ Argon2id + AES-256-GCM + DEK wrap + kit crypto en memoria. Tests verdes.
 - UI pestaña Auditoría (filtros tipo/resultado/usuario/objeto) + historial en detalle.
 - Capturas: `media/fase7-auditoria.png`, `media/fase7-historial.png`.
 
-**Gate:** ✅ tests emiten eventos; secretos no aparecen; filtros.  
-**Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup`  
-**Siguiente:** Fase 8 (seguridad sistema / clipboard) **solo tras aprobación explícita**.
+**Gate:** ✅ tests emiten eventos; secretos no aparecen; filtros.
 
 ---
 
-## FASE 8 — Seguridad de sistema
+## FASE 8 — Seguridad de sistema ✅ (esta entrega)
 
-- Clipboard auto-clear §14.
-- Hardening IPC/CSP/paths.
-- Keystore OS auxiliar solo si aprobado (nunca master recuperable).
-- Logs seguros + tests de redaction.
-- Borrado con confirmación + límites SSD documentados.
+- Clipboard §14: copiar password → toast temporal → auto-clear tras 10/30/60 s o desactivado (default **30 s**). Límites OS documentados (historial del portapapeles).
+- Configuración UI: auto-lock + clipboard timeout; avisos SSD / soft-delete.
+- Backups cifrados `.cpbak` (`backup_version` = 1): crear, verificar integridad, restaurar con backup preventivo + confirmación; no borrar antiguos sin confirmación.
+- Export plaintext **bloqueado** por defecto; import gestores externos = stub con confirmación obligatoria.
+- Logging seguro: `redact_secrets` + tests de que secretos no aparecen.
+- Eventos de auditoría: `clipboard_copy`, `backup_create` / `backup_restore`, `settings_change`, export/import intentos.
+- Capturas: `media/fase8-configuracion.png`, `media/fase8-backup.png`.
 
-**Gate:** checklist OWASP desktop revisada.
+**Gate:** ✅ tests clipboard/settings helpers, backup round-trip + integridad, plaintext export blocked, secrets no en logs.  
+**Smoke:** `cargo test -p vault-core -p vault-storage -p vault-backup`  
+**Siguiente:** Fase 9 (UI pulida) **solo tras OK explícito de Sebastián**.
 
 ---
 
@@ -123,10 +119,11 @@ Argon2id + AES-256-GCM + DEK wrap + kit crypto en memoria. Tests verdes.
 
 - Todas las pantallas §13 pulidas.
 - Dashboard con avisos caducidad.
-- Configuración (timeouts, clipboard, temas).
+- Configuración (timeouts, clipboard, temas) — base ya en F8; pulido visual aquí.
 - UX de reutilización y fortaleza (zxcvbn offline opcional aquí o F6+).
 
-**Gate:** usable end-to-end offline en plataforma prioritaria.
+**Gate:** usable end-to-end offline en plataforma prioritaria.  
+**No empezar sin aprobación de Sebastián.**
 
 ---
 

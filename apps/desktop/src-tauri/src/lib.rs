@@ -1,15 +1,17 @@
-//! Shell Tauri — Fase 7: bóveda + CRUD + políticas + generador + auditoría.
+//! Shell Tauri — Fase 8: + configuración, clipboard, backups.
 
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use vault_backup::{BackupService, StubBackupService};
 use vault_core::audit::{AuditEvent, AuditFilter};
+use vault_core::backup_ops::BackupInfo;
 use vault_core::credentials::{Credential, CredentialInput, CredentialSummary, HistoryEntry};
 use vault_core::generator::{GeneratedPassword, GeneratorOptions};
 use vault_core::policy::{PasswordPolicy, PolicyInput, PolicyValidation};
 use vault_core::recovery::{ProductionRecoveryKit, RecoveryKit};
 use vault_core::session::SessionState;
+use vault_core::settings::AppSettings;
 use vault_core::{AppPaths, Vault, APP_SCHEMA_VERSION, IMPLEMENTED_PHASE};
 use vault_storage::StorageBackendKind;
 
@@ -309,6 +311,118 @@ fn audit_password_view(
     })
 }
 
+#[tauri::command]
+fn settings_get(state: tauri::State<'_, Mutex<AppState>>) -> Result<AppSettings, String> {
+    with_vault_mut(&state, |vault| {
+        vault.get_settings().map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn settings_update(
+    state: tauri::State<'_, Mutex<AppState>>,
+    settings: AppSettings,
+) -> Result<AppSettings, String> {
+    with_vault_mut(&state, |vault| {
+        vault.update_settings(settings).map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn clipboard_copied(
+    state: tauri::State<'_, Mutex<AppState>>,
+    field: String,
+) -> Result<(), String> {
+    with_vault_mut(&state, |vault| {
+        vault
+            .record_clipboard_copy(&field)
+            .map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn backup_create(
+    state: tauri::State<'_, Mutex<AppState>>,
+    master_password: String,
+    dest: Option<String>,
+) -> Result<BackupInfo, String> {
+    let result = with_vault_mut(&state, |vault| {
+        let path = match dest {
+            Some(d) => PathBuf::from(d),
+            None => vault.default_backup_path(),
+        };
+        vault
+            .create_backup(&path, master_password.as_bytes())
+            .map_err(|e| e.to_string())
+    });
+    drop(master_password);
+    result
+}
+
+#[tauri::command]
+fn backup_list(state: tauri::State<'_, Mutex<AppState>>) -> Result<Vec<BackupInfo>, String> {
+    with_vault_mut(&state, |vault| {
+        vault.list_local_backups().map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn backup_verify(
+    state: tauri::State<'_, Mutex<AppState>>,
+    path: String,
+    master_password: String,
+) -> Result<BackupInfo, String> {
+    let result = with_vault_mut(&state, |vault| {
+        vault
+            .verify_backup(Path::new(&path), master_password.as_bytes())
+            .map_err(|e| e.to_string())
+    });
+    drop(master_password);
+    result
+}
+
+#[tauri::command]
+fn backup_restore(
+    state: tauri::State<'_, Mutex<AppState>>,
+    path: String,
+    master_password: String,
+    confirm_overwrite: bool,
+) -> Result<BackupInfo, String> {
+    let result = with_vault_mut(&state, |vault| {
+        vault
+            .restore_backup(
+                Path::new(&path),
+                master_password.as_bytes(),
+                confirm_overwrite,
+            )
+            .map_err(|e| e.to_string())
+    });
+    drop(master_password);
+    result
+}
+
+#[tauri::command]
+fn backup_delete(
+    state: tauri::State<'_, Mutex<AppState>>,
+    path: String,
+    confirmed: bool,
+) -> Result<(), String> {
+    with_vault_mut(&state, |vault| {
+        vault
+            .delete_local_backup(Path::new(&path), confirmed)
+            .map_err(|e| e.to_string())
+    })
+}
+
+#[tauri::command]
+fn export_plaintext_blocked(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    with_vault_mut(&state, |vault| {
+        vault.export_plaintext().map_err(|e| e.to_string())
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -337,7 +451,16 @@ pub fn run() {
             generator_generate,
             audit_list,
             audit_app_start,
-            audit_password_view
+            audit_password_view,
+            settings_get,
+            settings_update,
+            clipboard_copied,
+            backup_create,
+            backup_list,
+            backup_verify,
+            backup_restore,
+            backup_delete,
+            export_plaintext_blocked
         ])
         .run(tauri::generate_context!())
         .expect("error al arrancar Contraseñas");
