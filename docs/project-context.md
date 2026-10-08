@@ -1,6 +1,6 @@
 # Contexto de proyecto — Contraseñas
 
-**Actualizado:** 2026-10-08 · Fase 7 (auditoría)
+**Actualizado:** 2026-10-08 · Plan base F0–F10 ✅ completado
 
 ## Qué es
 
@@ -23,17 +23,18 @@ Gestor de contraseñas/secretos de **escritorio local**, offline-first, con prio
 | ID | Decisión | Estado |
 |----|----------|--------|
 | D1 | Stack: **Tauri 2 + Rust + React/TS** | **Aprobado** |
-| D2 | Storage: **SQLCipher + AEAD**; fallback blob | **Aprobado + implementado F3** (SQLCipher activo) |
-| D3 | Crypto: AES-256-GCM + Argon2id + DEK | **Implementado** F2 |
-| D4 | Kit de emergencia | **Aprobado + persistencia wrap F3** |
-| D6 | Auditoría MVP = SQLCipher + sequence (opción A); `prev_hash` schema-ready | **Aprobado de facto F7** |
-| D5, D7–D9 | Plataforma / historial secrets opt-in / keystore / backup passphrase | Propuestas |
+| D2 | Storage: **SQLCipher + AEAD**; fallback blob | **Aprobado + implementado** |
+| D3 | Crypto: AES-256-GCM + Argon2id + DEK | **Implementado** |
+| D4 | Kit de emergencia | **Aprobado + persistido** |
+| D6 | Auditoría MVP = SQLCipher + sequence (opción A); `prev_hash` schema-ready | **Implementado** |
+| D5, D7–D9 | Plataforma / historial secrets opt-in / keystore / backup passphrase | Abiertas / futuras |
 
 ## Estado del trabajo
 
-- **Fases 0–7** ✅.
-- **Siguiente:** Fase 8 (seguridad sistema) **tras aprobación explícita**.
-- **Nota:** todo el trabajo es en la VM/repo del agente cloud; nada instalado en el PC de Sebastián.
+- **Fases 0–10 (plan base)** ✅ completadas en la VM/repo del agente.
+- Revisión de seguridad: `docs/SECURITY_REVIEW.md`.
+- **Nada instalado en el PC personal de Sebastián.**
+- Features futuras (firma real de instaladores, 2FA, sync, etc.): **solo si se piden explícitamente**.
 
 ## Rutas canónicas
 

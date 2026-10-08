@@ -30,3 +30,29 @@ pub fn set_owner_only_file_permissions(path: &Path) -> Result<(), StorageError> 
     }
     Ok(())
 }
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::tempdir;
+
+    #[test]
+    fn data_dir_is_owner_only_700() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("vault-data");
+        ensure_data_dir(&path).unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700);
+    }
+
+    #[test]
+    fn file_is_owner_only_600() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("vault.dat");
+        fs::write(&path, b"x").unwrap();
+        set_owner_only_file_permissions(&path).unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+}

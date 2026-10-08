@@ -471,6 +471,22 @@ mod tests {
         assert!(!header_txt.contains("unique-master-XYZ-not-on-disk-7942"));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn vault_files_have_owner_only_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempdir().unwrap();
+        let mut v = test_vault(dir.path());
+        v.create(b"perm-master-ok", false).unwrap();
+        let dir_mode = fs::metadata(dir.path()).unwrap().permissions().mode() & 0o777;
+        let header_mode =
+            fs::metadata(v.paths.vault_header()).unwrap().permissions().mode() & 0o777;
+        let db_mode = fs::metadata(v.paths.vault_db()).unwrap().permissions().mode() & 0o777;
+        assert_eq!(dir_mode, 0o700);
+        assert_eq!(header_mode, 0o600);
+        assert_eq!(db_mode, 0o600);
+    }
+
     #[test]
     fn recovery_unlock_works() {
         let dir = tempdir().unwrap();

@@ -5,67 +5,78 @@ No envía datos a Internet. La seguridad va por delante de la comodidad.
 
 ## En qué punto estamos
 
-**Fase 7 — historial y auditoría.** Puedes ver **qué cambió** en cada credencial y un **registro de acciones** de la app (desbloqueos, altas, ver contraseña…), **sin** guardar las claves en ese registro.
+**Plan base F0–F10 completado** (diseño → crypto → bóveda → credenciales → reglas → generador → auditoría → clipboard/backups → UI → hardening).
 
-La siguiente etapa (Fase 8 — seguridad del sistema, p. ej. portapapeles) **solo empezará cuando Sebastián lo apruebe**.
+Revisión de seguridad: [`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md).  
+**No se afirma “100 % seguro”.** Hay límites reales (memoria, SSD, malware).
 
-> Todo el desarrollo hasta ahora está en la máquina del agente cloud / este repositorio. **Nada se ha instalado en el ordenador personal de Sebastián.**
+> Todo el desarrollo está en la máquina del agente cloud / este repositorio. **Nada se ha instalado en el ordenador personal de Sebastián.** Instalar en un PC de usuario es un paso **futuro** (idealmente con binarios firmados).
 
 ## Qué se ha decidido (aprobado)
 
 - Tecnología: Tauri 2 + Rust + React/TypeScript.
 - Guardado: base cifrada (SQLCipher) más cifrado extra de los campos secretos.
-- Si olvidas la contraseña maestra: habrá un **kit de emergencia** (un código para guardar en papel / lugar seguro). La contraseña maestra **nunca** se guarda de forma que se pueda leer después.
+- Si olvidas la contraseña maestra: **kit de emergencia** (código para guardar en papel). La contraseña maestra **nunca** se guarda de forma que se pueda leer después.
 
 Detalle técnico: carpeta [`docs/`](docs/).
 
-## Cómo probar (para quien prepare el entorno)
+## Cómo probar en un entorno de desarrollo
 
-Necesitas: Node 20+, pnpm, Rust estable. En Linux, para la ventana de escritorio completa, también las dependencias gráficas de Tauri ([guía](https://tauri.app/start/prerequisites/)).
+Necesitas: Node 20+, pnpm, Rust estable. En Linux, dependencias gráficas de Tauri ([guía](https://tauri.app/start/prerequisites/)).
 
 ```bash
-# Comprobaciones rápidas (sin abrir la ventana gráfica)
+# Comprobaciones rápidas (sin ventana)
 pnpm --dir apps/desktop install
-pnpm smoke
-# equivalente: cargo test de los crates + typecheck del frontend
+cargo test -p vault-core -p vault-storage -p vault-backup
+pnpm --dir apps/desktop exec tsc --noEmit
+cargo clippy -p vault-core -p vault-storage -p vault-backup -- -D warnings
+cargo audit   # opcional SCA
+pnpm --dir apps/desktop audit
 ```
 
 ```bash
-# Vista previa solo del interfaz en el navegador (sin Tauri)
-pnpm --dir apps/desktop dev
-```
-
-```bash
-# App de escritorio completa (requiere deps gráficas del sistema)
+# App de escritorio (requiere deps gráficas)
 pnpm --dir apps/desktop tauri dev
 ```
 
-> En Linux hace falta instalar las libs gráficas de Tauri (p. ej. `libwebkit2gtk-4.1-dev`, `librsvg2-dev`, … — ver [prerequisites](https://tauri.app/start/prerequisites/)). Sin ellas, `tauri dev` falla; igual puedes validar con `pnpm smoke` (tests Rust + typecheck web). En este agente ya se comprobó `cargo check -p contrasenas-desktop` tras instalar esas deps.
+Datos locales: por defecto bajo `~/.local/share/contrasenas` (Linux) o `%APPDATA%\Contraseñas` (Windows).  
+Puedes forzar otra ruta con `CONTRASENAS_DATA_DIR=/ruta/segura`.
+
+## Notas de build / instalador (para más adelante)
+
+Cuando se quiera empaquetar para un PC de usuario:
+
+```bash
+pnpm --dir apps/desktop tauri build
+```
+
+- Genera artefactos según el SO (AppImage/deb, MSI, dmg…).
+- **Firma de código / notarización:** ver §5 de `docs/SECURITY_REVIEW.md`. Los certificados **no** van en el repo.
+- Hasta que haya builds firmados, trata cualquier instalador como “solo para pruebas en máquina de confianza”.
 
 ## Estructura del proyecto
 
 ```
 apps/desktop/          → interfaz + shell Tauri
-crates/vault-core/     → sesión, crypto, bóveda, CRUD credenciales
+crates/vault-core/     → sesión, crypto, bóveda, CRUD, ajustes
 crates/vault-storage/  → SQLCipher + AEAD / fallback
-crates/vault-backup/   → backups (stubs)
-docs/                  → plan de seguridad y fases
+crates/vault-backup/   → backups .cpbak
+docs/                  → plan de seguridad, fases, SECURITY_REVIEW
 ```
 
 ## Documentación
 
 | Documento | Para qué |
 |-----------|----------|
-| [docs/arquitectura-seguridad.md](docs/arquitectura-seguridad.md) | Índice del plan |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitectura y stack |
-| [docs/SECURITY.md](docs/SECURITY.md) | Cifrado, kit de emergencia, límites |
-| [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) | Amenazas |
+| [docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) | Revisión F10: controles, riesgos, firma |
+| [docs/SECURITY.md](docs/SECURITY.md) | Cifrado, kit, límites |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Fases F0–F10 |
-| [docs/project-context.md](docs/project-context.md) | Decisiones del proyecto |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitectura |
+| [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) | Amenazas |
+| [docs/project-context.md](docs/project-context.md) | Decisiones |
 
 ## Importante
 
 - No hay telemetría.
 - No subas nunca ficheros de bóveda, backups ni códigos de emergencia a Git.
-- Fase 8 (seguridad sistema) **pendiente de aprobación**.
-- Comprobar bóveda + CRUD: `cargo test -p vault-core -p vault-storage -p vault-backup`
+- Features nuevas (2FA, sync, etc.) **solo con aprobación explícita**.

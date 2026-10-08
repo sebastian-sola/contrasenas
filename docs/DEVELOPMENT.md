@@ -1,6 +1,6 @@
 # Plan de desarrollo por fases — Contraseñas
 
-**Estado:** Fase 9 ✅ completada · **Fase 10 pendiente de aprobación explícita de Sebastián** (última fase del plan base)
+**Estado:** Plan base F0–F10 ✅ completado · Futuro opcional solo con decisión explícita
 
 Alineado con requisito §36. Prioridad: seguridad de secretos. Entre fases: checklist §37 + revisión de amenazas §39.
 
@@ -126,19 +126,21 @@ Argon2id + AES-256-GCM + DEK wrap + kit crypto en memoria. Tests verdes.
 - Capturas: `media/fase9-bloqueo.png`, `media/fase9-dashboard.png`, `media/fase9-credenciales.png`.
 
 **Gate:** ✅ app usable offline end-to-end en desktop; tests crates verdes.  
-**Siguiente:** Fase 10 (hardening / release) **solo tras OK explícito de Sebastián**. Tras F10 no quedan fases del plan base.
+**Siguiente:** Fase 10 hecha.
 
 ---
 
-## FASE 10 — Hardening y release engineering
+## FASE 10 — Hardening y release engineering ✅ (esta entrega)
 
-- SCA, Dependabot/Renovate, pipeline completo.
-- Threat model actualizado; `docs/SECURITY_REVIEW.md`.
-- Preparación firma/notarización (sin certs en repo).
-- Instalador; tests de seguridad §26 ampliados.
-- Revisión final §38 / §39.
+- SCA: `cargo audit` + `pnpm audit`; CI con audit + gitleaks (sin `continue-on-error`).
+- Clippy `-D warnings` verde; tests de permisos Unix, master no en disco, redaction, sin clientes HTTP en `vault-core`.
+- Revisión: permisos, logs, wipe al lock, IPC mínimo, data dir XDG (no temp por defecto), `Zeroizing` de master en IPC.
+- Arquitectura de **firma de binarios** Windows/macOS/Linux documentada **sin certificados en el repo**.
+- `docs/SECURITY_REVIEW.md`: controles, no implementado, riesgos, deps críticas, recomendaciones.
+- README: notas de build/instalación local (no implica instalado en el PC de Sebastián).
 
-**Gate:** candidata a release local; aún sin sync/2FA real salvo que se abra fase posterior.
+**Gate:** ✅ candidata a uso local offline; sin sync/2FA. Plan base F0–F10 cerrado.  
+**Posterior:** solo con OK explícito (firma real, 2FA, sync, etc.).
 
 ---
 

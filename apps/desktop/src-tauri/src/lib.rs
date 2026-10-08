@@ -1,8 +1,9 @@
-//! Shell Tauri — Fase 8: + configuración, clipboard, backups.
+//! Shell Tauri — Fase 10: hardening (data dir, wipe master, capabilities mínimas).
 
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use zeroize::Zeroizing;
 use vault_backup::{BackupService, StubBackupService};
 use vault_core::audit::{AuditEvent, AuditFilter};
 use vault_core::backup_ops::BackupInfo;
@@ -48,7 +49,31 @@ fn backend_label(kind: StorageBackendKind) -> &'static str {
     }
 }
 
+/// Directorio de datos de la app.
+/// Prioridad: `CONTRASENAS_DATA_DIR` → XDG/`%APPDATA%` → `~/.local/share/contrasenas`
+/// (solo cae a temp si no hay HOME; útil en entornos mínimos).
 fn default_data_dir() -> PathBuf {
+    if let Ok(p) = std::env::var("CONTRASENAS_DATA_DIR") {
+        return PathBuf::from(p);
+    }
+    if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+        if !xdg.is_empty() {
+            return PathBuf::from(xdg).join("contrasenas");
+        }
+    }
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        if !appdata.is_empty() {
+            return PathBuf::from(appdata).join("Contraseñas");
+        }
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        if !home.is_empty() {
+            return PathBuf::from(home)
+                .join(".local")
+                .join("share")
+                .join("contrasenas");
+        }
+    }
     std::env::temp_dir().join("contrasenas-dev-data")
 }
 
@@ -94,12 +119,12 @@ fn vault_create(
     state: tauri::State<'_, Mutex<AppState>>,
     master_password: String,
 ) -> Result<String, String> {
+    let master = Zeroizing::new(master_password);
     let result = with_vault_mut(&state, |vault| {
         vault
-            .create(master_password.as_bytes(), true)
+            .create(master.as_bytes(), true)
             .map_err(|e| e.to_string())
     });
-    drop(master_password);
     let created = result?;
     Ok(created
         .recovery_code
@@ -112,16 +137,15 @@ fn try_unlock(
     state: tauri::State<'_, Mutex<AppState>>,
     master_password: String,
 ) -> Result<(), String> {
-    let result = with_vault_mut(&state, |vault| {
+    let master = Zeroizing::new(master_password);
+    with_vault_mut(&state, |vault| {
         if vault.header().is_none() {
             vault.open_locked().map_err(|e| e.to_string())?;
         }
         vault
-            .unlock_with_master(master_password.as_bytes())
+            .unlock_with_master(master.as_bytes())
             .map_err(|e| e.to_string())
-    });
-    drop(master_password);
-    result
+    })
 }
 
 #[tauri::command]
@@ -346,17 +370,16 @@ fn backup_create(
     master_password: String,
     dest: Option<String>,
 ) -> Result<BackupInfo, String> {
-    let result = with_vault_mut(&state, |vault| {
+    let master = Zeroizing::new(master_password);
+    with_vault_mut(&state, |vault| {
         let path = match dest {
             Some(d) => PathBuf::from(d),
             None => vault.default_backup_path(),
         };
         vault
-            .create_backup(&path, master_password.as_bytes())
+            .create_backup(&path, master.as_bytes())
             .map_err(|e| e.to_string())
-    });
-    drop(master_password);
-    result
+    })
 }
 
 #[tauri::command]
@@ -372,13 +395,12 @@ fn backup_verify(
     path: String,
     master_password: String,
 ) -> Result<BackupInfo, String> {
-    let result = with_vault_mut(&state, |vault| {
+    let master = Zeroizing::new(master_password);
+    with_vault_mut(&state, |vault| {
         vault
-            .verify_backup(Path::new(&path), master_password.as_bytes())
+            .verify_backup(Path::new(&path), master.as_bytes())
             .map_err(|e| e.to_string())
-    });
-    drop(master_password);
-    result
+    })
 }
 
 #[tauri::command]
@@ -388,17 +410,12 @@ fn backup_restore(
     master_password: String,
     confirm_overwrite: bool,
 ) -> Result<BackupInfo, String> {
-    let result = with_vault_mut(&state, |vault| {
+    let master = Zeroizing::new(master_password);
+    with_vault_mut(&state, |vault| {
         vault
-            .restore_backup(
-                Path::new(&path),
-                master_password.as_bytes(),
-                confirm_overwrite,
-            )
+            .restore_backup(Path::new(&path), master.as_bytes(), confirm_overwrite)
             .map_err(|e| e.to_string())
-    });
-    drop(master_password);
-    result
+    })
 }
 
 #[tauri::command]

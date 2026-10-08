@@ -1,6 +1,6 @@
 //! Núcleo de la bóveda Contraseñas.
 //!
-//! Fase 9: UI de escritorio pulida + panel de inicio.
+//! Fase 10: hardening / revisión de seguridad.
 
 #![forbid(unsafe_code)]
 
@@ -52,15 +52,27 @@ pub use vault_header::{VaultFileHeader, VAULT_SCHEMA_VERSION};
 pub const APP_SCHEMA_VERSION: u16 = 4;
 
 /// Fase de desarrollo implementada en este crate.
-pub const IMPLEMENTED_PHASE: u8 = 9;
+pub const IMPLEMENTED_PHASE: u8 = 10;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn phase_is_nine() {
-        assert_eq!(IMPLEMENTED_PHASE, 9);
+    fn phase_is_ten() {
+        assert_eq!(IMPLEMENTED_PHASE, 10);
+    }
+
+    /// Los crates de bóveda no deben arrastrar clientes HTTP obvios.
+    #[test]
+    fn vault_core_manifest_has_no_http_clients() {
+        let manifest = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
+        for forbidden in ["reqwest", "ureq", "hyper", "tokio-tungstenite"] {
+            assert!(
+                !manifest.contains(forbidden),
+                "vault-core no debe depender de {forbidden}"
+            );
+        }
     }
 
     #[test]

@@ -433,6 +433,7 @@ dependencies = [
  "vault-backup",
  "vault-core",
  "vault-storage",
+ "zeroize",
 ]
 
 [[package]]

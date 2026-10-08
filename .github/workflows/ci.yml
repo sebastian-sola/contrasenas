@@ -39,11 +39,22 @@ jobs:
           cache-dependency-path: apps/desktop/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - name: npm audit
+        run: pnpm audit --prod
+
+  cargo-audit:
+    name: Dependency audit (cargo audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   secrets-scan:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
